@@ -1,5 +1,6 @@
 *.ipynb
 *.md
+build
 
 labnotes
 project.cfg

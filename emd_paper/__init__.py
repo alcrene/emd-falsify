@@ -19,8 +19,8 @@ logging.basicConfig()
 logger = logging.getLogger(__name__)
 
 # Configure Sumatra records viewer
-RecordStoreView.default_project_dir = config.PATHS.projectdir
-smttask.config.load_project(config.PATHS.smtproject)
+RecordStoreView.default_project_dir = config.paths.projectdir
+smttask.config.load_project(config.paths.smtproject)
 smttask.config.safe_packages.add('emd-paper')
 
 # Include this variable at the bottom of notebooks to display the branch name & git commit used to execute it

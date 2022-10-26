@@ -3,11 +3,11 @@
 # jupyter:
 #   jupytext:
 #     formats: ipynb,py:percent
+#     notebook_metadata_filter: -jupytext.text_representation.jupytext_version
 #     text_representation:
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.13.4
 #   kernelspec:
 #     display_name: Python (wcml)
 #     language: python
@@ -38,11 +38,15 @@ wcml.setup('numpy', view_only=True)
 
 # %%
 import holoviews as hv
-from utils import glue  # Extended glue which works with calls myst_nb_bokeh.glue when needed
+from emd_paper.utils import glue  # Extended glue which works with calls myst_nb_bokeh.glue when needed
 from wcml.viz import RSView, config, BokehOpts, ColorEvolCurvesByMaxL
 
 # %%
 bokeh = True
+
+# %%
+import scityping
+scityping.__file__
 
 # %%
 if bokeh:
@@ -112,7 +116,7 @@ rsview_ictal = RSView().filter.tags({'finished', "<ξtilde>", "ξbar init zero",
                  .filter.reason("Fixed σ – α=0.9 only – more fits") \
                  .filter.after(2022,2,24,16).filter.before(2022,2,25,21)
 
-# %%
+# %% tags=[]
 logp_ictal = get_logpcurves(rsview_ictal)
 
 # %% [markdown]
