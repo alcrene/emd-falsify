@@ -13,10 +13,15 @@ import math
 import numpy as np
 import dataclasses
 from collections import namedtuple
+import IPython
 
-from emd_paper.find_sane_dt import make_int_superscript
 from typing import ClassVar, Union, Tuple, NamedTuple
 from scityping.numpy import NPValue, Array
+
+import myst_nb
+
+from .config import config  # FIXME: Remove dependency on config
+from .find_sane_dt import make_int_superscript
 
 # ## glue
 
@@ -28,26 +33,36 @@ def glue(name, variable, display=True, print_name=True):
     useful to find the correct name to use refer to the figure from the
     rendered document.
     
-    Supports: Anything 'myst_nb.glue' supports, Bokeh, Holoviews (Bokeh only)
-    
-    .. Todo:: Don't assume that Holoviews => Bokeh
+    Supports: Anything 'myst_nb.glue' supports, Bokeh, Holoviews
     """
-    if print_name:   # TODO: Return a more nicely formatted object, with _repr_html_,
-        print(name)  # which combines returned fig object and prints the name below
-    mrostr = str(type(variable).mro())
-    bokeh_output = ("holoviews" in mrostr or "bokeh" in mrostr)
-    if bokeh_output:
-        from myst_nb_bokeh import glue_bokeh
-        if "holoviews" in mrostr:
-            import holoviews as hv
-            # Convert Holoviews object to normal Bokeh plot
-            bokeh_obj = hv.render(variable, backend="bokeh")
+    # TODO: Return a more nicely formatted object, with _repr_html_,
+    #       which combines returned fig object and prints the name below
+    if print_name:   
+        if IPython.get_ipython():
+            IPython.display.display(name)  # Should look nicer in Jupyter Book, especially when there are multiple glue statements
         else:
-            bokeh_obj = variable
+            print(name)
+    mrostr = str(type(variable).mro()).lower()
+    if "bokeh" in mrostr:
+        # Normal Bokeh object (since HoloViews objects are renderer-agnostic, they should never have "bokeh" in their class inheritance)
+        from myst_nb_bokeh import glue_bokeh
         return glue_bokeh(name, bokeh_obj, display)
+
+    if "holoviews" in mrostr:
+        import holoviews as hv
+        if config.figures.backend == "bokeh":
+            from myst_nb_bokeh import glue_bokeh
+            # Render Holoviews object to get a normal Bokeh plot
+            bokeh_obj = hv.render(variable, backend="bokeh")
+            return glue_bokeh(name, bokeh_obj, display)
+        else:
+            assert config.figures.backend == "matplotlib", "config.backend should be either 'bokeh' or 'matplotlib'"
+            # Render Holoviews object to get a normal Matplotlib plot
+            mpl_obj = hv.render(variable, backend="matplotlib")
+            return myst_nb.glue(name, mpl_obj, display)
+
     else:
-        from myst_nb import glue
-        return glue(name, variable, display)
+        return myst_nb.glue(name, variable, display)
 
 # ## format_scientific
 

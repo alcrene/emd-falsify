@@ -1,3 +1,6 @@
 [build-system]
-requires = ["setuptools>=40.8.0", "wheel"]
+requires = ["setuptools>=42", "wheel", "setuptools_scm[toml]>=6.2"]
 build-backend = "setuptools.build_meta:__legacy__"
+
+# setuptools_scm allows to automatically include git-tracked files in package 
+[tool.setuptools_scm]

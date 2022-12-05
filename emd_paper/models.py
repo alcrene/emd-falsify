@@ -18,17 +18,16 @@
 # # Models
 # $\renewcommand{\EE}{\mathbb{E}}
 # \renewcommand{\RR}{\mathbb{R}}
-# \newcommand{\Me}{\mathcal{M}^ε}
+# \renewcommand{\Me}{\mathcal{M}^ε}
 # \renewcommand{\Image}{\mathop{\mathrm{Image}}}
 # \renewcommand{\sgn}{\mathop{\mathrm{sgn}}}
-# \renewcommand{\Exponential}{\mathop{\mathrm{Exponential}}} % Distributions
+# \renewcommand{\Exponential}{\mathop{\mathrm{Exponential}}}
 # \renewcommand{\SkewNormal}{\mathop{\mathrm{SkewNormal}}}
 # \renewcommand{\exGaussian}{\mathop{\mathrm{exGaussian}}}
 # \renewcommand{\IG}{\mathop{\mathrm{IG}}}
 # \renewcommand{\NIG}{\mathop{\mathrm{NIG}}}
 # \renewcommand{\Poisson}{\mathop{\mathrm{Poisson}}}
-# \renewcommand{\Exponential}{\mathop{\mathrm{Exponential}}}
-# \renewcommand{\Gamma}{\mathop{\mathrm{Gamma}}}
+# \renewcommand{\Gammadist}{\mathop{\mathrm{Gamma}}}
 # \renewcommand{\Lognormal}{\mathop{\mathrm{Lognormal}}}$
 
 # %% tags=["hide-input"]
@@ -508,23 +507,24 @@ class exGaussianError(AdditiveRVError):
 # \end{aligned}$$
 
 # %% tags=["active-ipynb", "hide-input"]
-# %%opts Scatter (size=4)
+# %%opts Scatter [width=600] (size=4)
 # %%opts Curve [width=600] (color=colors["muted"]["cyan"])
 # %%opts HLine (color="grey", line_width=1)
-# %%opts Overlay [legend_position="right"]
+# %%opts Overlay [width=600, legend_position="right"]
 #
 # xarr = np.linspace(-2, 10, 400)
 # xdim = hv.Dimension("x", range=(xarr.min(), xarr.max()))
 # ydim = hv.Dimension("fx", label="f(x)")
 # γdim = hv.Dimension("γ", default=0.001)
-# hv.HoloMap({γ: hv.Curve(zip(xarr, exGaussianError.f(xarr, γ)), kdims=[xdim], vdims=[ydim])
+# hm = hv.HoloMap({γ: hv.Curve(zip(xarr, exGaussianError.f(xarr, γ)), kdims=[xdim], vdims=[ydim])
 #                * hv.Scatter([(exGaussianError.xguess(γ), 0)], label="initial guess x_0").opts(color=colors["bright"]["red"])
 #                * hv.Scatter([(exGaussianError.xroot(γ), 0)], label="solved x").opts(color=colors["bright"]["green"])
 #                * hv.HLine(0)
 #             for γ in [0, 0.001, 0.01, 0.1, 0.5, 1, 1.7, 2]},  # γ limited to interval (-1, 1)
-#            kdims=[γdim]).opts(
-#     ylim=(-4, 2),
-#     title="Cubic for intermediate value δ").redim.range(fx=(-4, 4))
+#            kdims=[γdim])
+# hm.opts(ylim=(-4, 2),
+#         title="Cubic for intermediate value δ") \
+#        .redim.range(fx=(-4, 4))
 
 # %% [markdown]
 # ### Normal-inverse Gaussian error
@@ -648,19 +648,20 @@ class NormInvGaussError(AdditiveRVError):
 # %% [markdown]
 # These equations are easily solved for $|x|$. Matching the sign of the asymmetry parameter ($b$) to the skewness ($γ$), we get all the function parameters:
 #
-# $$\begin{alignat}{2}
+# \begin{alignat}{2}
 # x &= \frac{b}{a} &&= \pm \frac{γ}{\sqrt{3κ - 4γ^2}} \\
 # c &= \sqrt{a^2- b^2} &&= \frac{9x^2}{γ^2} \\
 # a &= \frac{c}{\sqrt{1-x^2}} \\
 # b &= \sgn(γ) \, \frac{a}{|x|} \\
 # ω &= \frac{σc^{3/2}}{a} \\
 # ξ &= - \frac{ωb}{c}
-# \end{alignat}$$
+# \end{alignat}
 #
 # From the first equation and the requirement that $|x| < 1$ we get the constraint that $κ > \frac{5}{3} γ^2$ . The equality $κ = \frac{5}{3} γ^2$ corresponds to $a = b$, which has infinite moments.
 #
 # **Special case: $γ = 0$**  
 # We need to treat the case of a symmetric distribution specially, since $γ = b = 0$ implies $x \equiv 0$. However in this case the equations become trivially solvable:
+#
 # $$\begin{aligned}
 # 0 &= ξ \\
 # σ &= \frac{ω}{\sqrt{a}} \\
@@ -771,7 +772,7 @@ class PoissonError(AdditiveRVError):
 # %% [markdown]
 # ### Gamma error
 #
-# Denoted $\Gamma$.
+# Denoted $\Gammadist$.
 #
 # - Support on $\left(-\frac{2σ}{γ}, \infty\right)$.
 #
