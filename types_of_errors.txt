@@ -1,0 +1,8 @@
+Types of errors
+
+    WARNING:emd_paper.emd:Requested std err tolerance was not achieved. std err: 0.0062935226406358345
+    Requested max std err: 0.004
+    
+    ERROR:emd_paper.path_sampling:Failed to determine α & β parameters for beta distribution. Conditions were:
+        r=6.24122778821756
+        v=414.7130462762959

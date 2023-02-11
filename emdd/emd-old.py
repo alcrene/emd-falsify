@@ -2,7 +2,6 @@
 # ---
 # jupyter:
 #   jupytext:
-#     formats: py:percent,md:myst
 #     notebook_metadata_filter: -jupytext.text_representation.jupytext_version
 #     text_representation:
 #       extension: .py
@@ -15,7 +14,7 @@
 # ---
 
 # %% [markdown]
-# # EMD implementation
+# # Old EMD implementation
 #
 # $\renewcommand{\EE}{\mathbb{E} \,}
 # \renewcommand{\VV}{\mathbb{V} \,}

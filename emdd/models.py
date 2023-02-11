@@ -29,23 +29,65 @@
 # \renewcommand{\Poisson}{\mathop{\mathrm{Poisson}}}
 # \renewcommand{\Gammadist}{\mathop{\mathrm{Gamma}}}
 # \renewcommand{\Lognormal}{\mathop{\mathrm{Lognormal}}}$
+#
+# :::{margin}
+# **TODO**: Add link to paper.
+# :::  
+# This module provides a few simple models for use with the inferred model distance functions defined in [emd.py](./emd.py). To use these functions, a model must be divided into three parts:
+# - An independent value generator, typically $x$ or $t$. ($x \sim p_x$)
+# - A physical model. ($z \sim p_z(x)$)
+# - An observation model. ($y \sim p_y(x, z)$)
+#
+# We provide simple models for each of these. In some cases they may be used as-is, and are used for demonstrations and tests, but more generally they are intended as templates to help users implement models compatible with the distance functions of this package.
+#
+# For the most part, our implementations wrap a distribution in `numpy.random` or `scipy.stats` with the required interface.
+#
+# **Interface requirements**  
+# Models must have the following signatures:
+#
+# - *Independent model*: $L \mathtt{: int}, \mathtt{[seed]} \rightarrow x = \{x_1, \dotsc, x_L\}$
+# - *Physical model*: $x, \mathtt{[seed]} \rightarrow z$
+# - *Observation model*: $x, z, \mathtt{[seed]} \rightarrow y$
+#
+# The `seed` argument *must* be accepted, and *must* be optional. For stochastic models it should set state of the employed random number generator; for deterministic models it should be ignored.
+#
+# The main thing is that the distance functions will *only* use the parameters above (some combination of $L$, $x$, $z$ and `seed`). Any additional parameter must therefore already be associated to the model. This can be achieved in a number of ways, for example by hard-coding them in the functions, by wrapping functions with `functools.partial`, or by defining them as callable classes (i.e. classes with a `__call__` method).
+#
+# **Implementation**
+# The model implementations we provide use callable [dataclasses](https://docs.python.org/3/library/dataclasses.html); class instances store parameters (as well as a possible random seed) as attributes. Users may inherit from them to use their seed management, or simply use them as inspiration for their own implementations.
+#
+# *Seed management feature*:
+# A seed may be provided both when instantiating a model, *and* when calling for samples. The idea is that we may want different “sources of unicity”: a big unique random seed for the whole project, different seeds for different experiments, different seeds for data sets within an experiment, etc. Seeds can be passed as ints or tuples, and both the instantiation and calling seeds are combined to produce a unique random state for the random number generator.
 
 # %% tags=["hide-input"]
 import emd_paper
-import numpy as np
-from scipy import stats
-from scipy.optimize import root_scalar, minimize
-from dataclasses import dataclass, InitVar
+
+from abc import ABC, abstractmethod
 from collections import Counter
 from collections.abc import Callable
-from typing import Tuple
+from functools import lru_cache
+from dataclasses import dataclass, InitVar
+from typing import Union, Tuple
 
+from more_itertools import always_iterable
+import numpy as np
+from numpy.random import Generator, PCG64
+from scipy import stats
+from scipy.optimize import root_scalar, minimize
+
+# %% tags=["remove-cell"]
+SeedType = Union[None,int,Tuple[int]]
+
+
+# %% [markdown]
+# Plotting configuration (notebook only).
 
 # %% tags=["active-ipynb", "hide-input"]
 # import holoviews as hv
+# config = emd_paper.Config()
 #
-# backend = emd_paper.config.figures.backend
-# colors  = emd_paper.config.figures.colors
+# backend = config.figures.backend
+# colors  = config.figures.colors
 # hv.extension(backend)
 #
 # if backend == "matplotlib":
@@ -87,20 +129,19 @@ from typing import Tuple
 #             kdims=[varname], vdims=["Frequency"], label="samples")
 #         theory = hv.Scatter(zip(centers, model.pmf(centers)), label="pmf",
 #                             kdims=[varname], vdims=["Frequency"]
-#                  ).opts(color=colors["bright"]["red"],
-#                         size=4)
+#                  ).opts(color=colors["bright"]["red"]
+#                  ).opts(size=4, backend="bokeh")
 #     else:
 #         # Continuous distribution
 #         hist = hv.Histogram(
 #             np.histogram(model.rvs(L), bins='auto', density=True),
 #             kdims=[varname], vdims=["Frequency"], label="samples"
-#         ).opts(line_width=0)
+#         ).opts(line_width=0, backend="bokeh")
 #         xarr = np.linspace(hist.data[varname].min(), hist.data[varname].max())
 #         theory = hv.Curve(zip(xarr, model.pdf(xarr)), label="pdf",
 #                           kdims=[varname], vdims=["Frequency"])
 #     return hist * theory
-
-# %% tags=["active-ipynb", "hide-input"]
+#
 # def get_text_pos(panel):
 #     "Utility function, used to place Text elements in a plot."
 #     # Imperfect workaround; Bokeh doesn't really allow this for now (see https://discourse.holoviz.org/t/annotations-in-screen-coordinates)
@@ -119,12 +160,79 @@ from typing import Tuple
 # :::
 
 # %% [markdown]
+# :::{NOTE}  
+# All models are defined such that they are hashable, so that functions which take a model as argument can be cached. This is used in by some calibration utility functions to avoid recomputing expensive functions.
+# - ~~*Stochastic models* are hashed according to their identity.~~
+# - ~~*Deterministic models*~~ Models are hashed according to their fields. This allows memoization to occur also between different instances of the same model.
+#
+# :::
+
+# %% [markdown]
 # ## Independent var models
 #
 # Models generating values of the independent variable ($x \in X$ in our notation).
 # Generally expressions are conditioned on $X$, sometimes implicitely.
 #
 # $$\{\} \to X$$
+#
+# ### Typical usage
+#
+# Instantiate:
+# ```python
+# MX = MyIndepModel(*params, seed=seed)
+# ```
+#
+# Create $L$ data points:
+# ```python
+# x = MX(L)
+# ```
+#
+# As an infinite iterator (not available for all models):
+# ```python
+# for x in MX:
+#     do something
+# ```
+
+# %%
+@dataclass(frozen=True)
+class StatXModel(ABC):
+    """
+    Base class for an independent model wrapping a distribution from
+    `scipy.stats`.
+    Subclasses must add distribution parameters as dataclass fields and implement
+    `get_rv`, which takes those fields and returns a distribution.
+    
+    The main feature provided by this class is management of the `seed`:
+    unless the seed is changed, multiple draws always return the same samples.
+    To generate different samples, an additional `seed` argument can be provided.
+    This seed is combined with the one set at instantiation.
+    """
+    seed: SeedType=None
+
+    @abstractmethod
+    def get_rv(self, seed: SeedType=None) -> stats._distn_infrastructure.rv_generic:
+        raise NotImplementedError
+    
+    def get_rng(self, seed: SeedType=None) -> Generator:
+        # Combine self.seed and seed
+        if self.seed is not None and seed is not None:
+            seed = (*always_iterable(self.seed),
+                    *always_iterable(seed))
+        elif self.seed is not None:
+            seed = self.seed
+        return Generator(PCG64(seed))
+    def __iter__(self):
+        if self.seed is None:
+            raise RuntimeError("`seed` was not specified: cannot draw random samples.")
+        rv = self.get_rv(seed=self.seed)
+        while True:
+            yield rv.rvs()
+    def __call__(self, L, seed=None):
+        if seed is None and self.seed is None:
+            raise RuntimeError("`seed` was not specified: cannot draw random samples.")
+        # Call L times
+        return self.get_rv(seed=seed).rvs(size=L)
+
 
 # %% [markdown]
 # ### Uniformly distributed $X$
@@ -133,25 +241,20 @@ from typing import Tuple
 #
 # $$x \sim \mathcal{U}([a, b])$$
 #
-# The use of a uniform distribution for $x$ can be seen as a mathematical convenience, to allow all pairs $(x,y)$ to be treated as samples from the same distributions. For a process with no particular temporal structure, this produces almost equal statistics for $y$ than using sampling $y$ at regular intervals of $x$.
+# The use of a uniform distribution for $x$ can be seen as a mathematical convenience, to allow all pairs $(x,y)$ to be treated as samples from the same distributions. For a process with no particular temporal structure, this produces almost equal statistics for $y$ than using `LinspaceX` to sample $y$ at regular intervals of $x$.
+#
+# Stochastic: Even with the same `L`, each new call will return new $x$ values.
 
 # %%
-@dataclass
-class UniformX:
-    low: InitVar[float]
-    high: InitVar[float]
-    seed: InitVar[int]=None
-    shape: tuple[int,...]=None
-    rv: "scipy.stats.uniform_frozen"=None
-    def __post_init__(self, low, high, seed):
-        self.rv = stats.uniform(low, high)
-        self.shape = self.rv.rvs().shape
-        self.rv.random_state = seed
-    def __iter__(self):
-        while True:
-            yield self.rv.rvs()
-    def __call__(self, L=None):
-        return self.rv.rvs(size=L)
+@dataclass(frozen=True)
+class UniformX(StatXModel):
+    low : float=0.
+    high: float=1.
+    
+    def get_rv(self, seed=None):
+        rv = stats.uniform(self.low, self.high)
+        rv.random_state = self.get_rng(seed)
+        return rv
 
 
 # %% [markdown]
@@ -159,23 +262,54 @@ class UniformX:
 #
 # Parameters: $x_0$, $Δx$
 # $$\begin{aligned}
-# x_t &= x_{t-1} + Δx \,,& t \geq 1
+# x_i &= x_{i-1} + Δx \,,& i \geq 1
 # \end{aligned}$$
+#
+# Deterministic: For a given `L`, the same values are always returned.
+#
+# **Hashing behaviour** (relevant for caching):
+# Two models will hash to the same (and be considered equal) *iff both `x0` and `Δx` are equal*.
 
 # %%
-@dataclass
+@dataclass(frozen=True)
 class SequentialX:
-    x0: float
-    Δx: float
-    next_x: float=None
-    def __post_init__(self):
-        self.last_x = self.x0
+    x0: float=0.
+    Δx: float=1.
     def __iter__(self):
+        x = self.x0
+        i = 0
         while True:
-            yield self.last_x
-            self.last_x += self.Δx
-    def __call__(self, L=1):
+            yield self.x0 + i*self.Δx  # More numerically stable than always adding Δx
+            i += 1
+    def __call__(self, L):
         return np.array([x for x, _ in zip(self, range(L))])
+
+
+# %% [markdown]
+# ### Linearly spaced $X$
+#
+# Parameters: `low`, `high`
+# $$\begin{aligned}
+# x_i &= \mathrm{low} + i \cdot \frac{\mathrm{high} - \mathrm{low}}{L-1} \,,& i = 0,\dotsc,L-1
+# \end{aligned}$$
+#
+# Equivalent to NumPy’s `linspace`: values span the given interval uniformly. Deterministic: For a given `L`, the same values are always returned.
+#
+# **Hashing behaviour** (relevant for caching):
+# Two models will hash to the same (and be considered equal) *iff both `low` and `high` are equal*.
+#
+# **Restriction**: Since the step size depends on $L$, it is not possible to provide an iterator interface.
+
+# %%
+@dataclass(frozen=True)
+class LinspaceX:
+    low: float=0.
+    high: float=1.
+    def __iter__(self):
+        raise NotImplementedError("Since the step size depends on L, it is not "
+                                  "possible to provide an iterator interface.")
+    def __call__(self, L):
+        return np.linspace(self.low, self.high, L)
 
 
 # %% [markdown]
@@ -184,7 +318,7 @@ class SequentialX:
 # $$X \to Z$$
 
 # %% [markdown]
-# ### Perfect Exponential
+# ### Deterministic Exponential
 #
 # Deterministic
 #
@@ -201,17 +335,17 @@ class SequentialX:
 #   + $x$: measurement time; $y$: emission rate
 
 # %%
-@dataclass
-class PerfectExpon:
-    λ: float
-    seed: InitVar[None]=None  # Only for consistency with probabilistic models
+@dataclass(frozen=True)
+class DeterministicExpon:
+    λ: float=1.
+    seed: None=None  # Only for consistency with probabilistic models
     def __call__(self, x):
         return np.exp(-self.λ*x)
 
 
 # %% tags=["active-ipynb"]
 # MX = UniformX(0, 6)
-# MN = PerfectExpon(λ=0.3)
+# MN = DeterministicExpon(λ=0.3)
 # xarr = MX(60)
 # hv.Scatter(zip(xarr, MN(xarr)))
 
@@ -232,23 +366,24 @@ class PerfectExpon:
 #
 # The definitions for *skew* and *kurtosis* seen in the literature are not always consistent. We use the same ones as the summary tables of Wikipedia articles for statistical distributions. In particular, $κ = 0$ for a normal distribution (the “excess” kurtosis is relative to the normal distribution).
 #
-# We set the mean to zero not because noise can't be biased, but because we believe this is the most interesting case: with biased noise it fairly intuitive that the correct model may not have the highest likelihood when the bias is guessed incorrectly. It is also generally easy to construct such examples.
-#
 # All distributions are constructed using a variation on the method of moments, using the *second* and higher moments: we invert the closed form expressions for those moments in terms of parameters. We then match the *first* moment by *translation*. For a distribution with unbounded support, this is usually the same as inverting the closed-form expression for the mean, but for distributions with bounded support this results in moving the support, typically so that it contains some negative numbers.
 
 # %% [markdown]
 # ### Generative vs inference noise models
 #
 # For inference,  we restrict ourselves to distributions that have support over $(-\infty, \infty)$. Otherwise, if even a single data point falls outside the support (which is often occurs when the model does not match the data perfectly), the likelihood diverges to $-\infty$, preventing any comparison of models.
-#
 # When generating synthetic data we do not have this constraint (the model is by definition always exact). This allows generating data using distributions which have support on $(0, \infty)$ for the noise model, such as exponential, Poisson or lognormal distributions.
+#
+# Note that unsupported data samples are only the most salient examples of this issue. More generally, bounded distributions are very sensitive[^safe-bounded] to the location of their upper or lower bound, to the point of making fits unstable. In some cases it may be possible to remedy this by fixing the bound(s), but that constitutes a strong inductive bias which must be warranted.
 #
 # :::{admonition} Remark
 # The requirement that inference noise model have support on $\RR$ means that if the true noise model as bounded support, then for any practical inference model there will always be some mismatch between model and data.
 # :::
+#
+# [^safe-bounded]: This is because there is a sharp decrease in probability density at the bound. Counter examples exist, like unbounded distributions which truncated far into their tails, but are not what one usually intends as bounded distributions.
 
 # %%
-@dataclass
+@dataclass(frozen=True)
 class AdditiveRVError:
     """
     Base class for experimental models consisting of adding noise from a
@@ -257,14 +392,25 @@ class AdditiveRVError:
     
        Y|Z ~ Z + rv
     """
-    rv: "scipy.stats.rv_frozen"=None
-    seed: InitVar[int]=None
-    def __post_init__(self, seed):
-        self.rv.random_state = seed
-    def __call__(self, x, z):
-        return z + self.rv.rvs(size=z.shape)
+    seed: int=None
+    
+    @abstractmethod
+    def get_rv(self, seed: SeedType=None) -> stats._distn_infrastructure.rv_generic:
+        raise NotImplementedError
+    def get_rng(self, seed: SeedType=None) -> Generator:
+        # Combine self.seed and seed
+        if self.seed is not None and seed is not None:
+            seed = (*always_iterable(self.seed),
+                    *always_iterable(seed))
+        elif self.seed is not None:
+            seed = self.seed
+        return Generator(PCG64(seed))
+    def __call__(self, x, z, seed=None):
+        if seed is None and self.seed is None:
+            raise RuntimeError("`seed` was not specified: cannot draw random samples.")
+        return z + self.get_rv(seed).rvs(size=z.shape)
     def logpdf(self, y, z):
-        return self.rv.logpdf(y - z)
+        return self.get_rv().logpdf(y - z)
 
 
 # %% [markdown]
@@ -281,22 +427,23 @@ class AdditiveRVError:
 # $$y \sim \mathcal{N}(0, σ)$$
 
 # %%
-@dataclass
+@dataclass(frozen=True)
 class GaussianError(AdditiveRVError):
     μ: float=0.
     σ: float=1.
-    def __post_init__(self, seed):
-        self.rv = stats.norm(self.μ, self.σ)
-        super().__post_init__(seed)
+    def get_rv(self, seed: SeedType=None):
+        rv = stats.norm(self.μ, self.σ)
+        rv.random_state = self.get_rng(seed)
+        return rv
 
 
 # %% tags=["active-ipynb", "hide-input"]
-# show_dist(GaussianError(σ=0.5).rv)
+# show_dist(GaussianError(σ=0.5).get_rv())
 
 # %% [markdown]
 # ### Skew-normal distribution
 #
-# Model fo **asymmetrically** distributed errors with **light** tails ($\sim \exp(-x^2)$).  
+# Model for **asymmetrically** distributed errors with **light** tails ($\sim \exp(-x^2)$).  
 # A light tail means that deviations away from the mean on that side are **strongly** penalized.
 #
 # $γ = 0$ recovers the Gaussian distribution.
@@ -309,20 +456,26 @@ class GaussianError(AdditiveRVError):
 # $$y \sim \SkewNormal(0, σ, γ)$$
 
 # %%
-@dataclass
+@dataclass(frozen=True)
 class SkewNormalError(AdditiveRVError):
     μ: float=0.
-    γ: float=0  # Gaussian
-    σ: float=1
-    def __post_init__(self, seed):
+    γ: float=0.  # Gaussian
+    σ: float=1.
+    
+    @lru_cache(None)
+    def _get_rv_args(self):
         # See below for explanation
         x0 = self.xroot(self.γ)
         δ = np.sign(self.γ)*np.sqrt(x0*np.pi/2)
         α = δ / np.sqrt((1-δ)*(1+δ))
         ω = self.σ / np.sqrt(1 - 2*δ**2/np.pi)
         ξ = self.μ - ω*δ*np.sqrt(2/np.pi)
-        self.rv = stats.skewnorm(α, ξ, ω)
-        super().__post_init__(seed)
+        return α, ξ, ω
+    
+    def get_rv(self, seed: SeedType=None):
+        rv = stats.skewnorm(*self._get_rv_args())
+        rv.random_state = self.get_rng(seed)
+        return rv
       
     @staticmethod
     def f(x, γ): return 4*γ*(1-x)**3 - (4-np.pi)**2*x**3
@@ -338,7 +491,7 @@ class SkewNormalError(AdditiveRVError):
 #
 # γlst = [-.99, -0.5, 0, 0.5]
 # σlst = [1, 2]
-# dists = {(γ, σ): SkewNormalError(γ=γ, σ=σ).rv for γ in γlst for σ in σlst}
+# dists = {(γ, σ): SkewNormalError(γ=γ, σ=σ).get_rv() for γ in γlst for σ in σlst}
 # panels = [show_dist(d).opts(title=f"γ={γ}, σ={σ}") for (γ,σ), d in dists.items()]
 # hv.Layout([(p * hv.Text(*get_text_pos(p), f"μ={d.mean():.2f}\nσ={d.std():.2f}\nmedian={d.median():.2f}")).opts(title=f"γ={γ}, σ={σ}")
 #            for (γ, σ), p, d in zip(dists.keys(), panels, dists.values())]
@@ -382,8 +535,8 @@ class SkewNormalError(AdditiveRVError):
 #
 # xarr = np.linspace(-2, 2, 100)
 # xdim = hv.Dimension("x", soft_range=(xarr.min(), xarr.max()))
-# ydim = hv.Dimension("f(x)")
-# γdim = hv.Dimension("γ", default=-0.2)
+# ydim = hv.Dimension("fx", label="f(x)")
+# γdim = hv.Dimension("γ", default=0)
 # hv.HoloMap({γ: hv.Curve(zip(xarr, SkewNormalError.f(xarr, γ)), kdims=[xdim], vdims=[ydim])
 #                * hv.Scatter([(SkewNormalError.xroot(γ), 0)], label="solved x")
 #                * hv.HLine(0)
@@ -415,12 +568,22 @@ class SkewNormalError(AdditiveRVError):
 # $$y \sim \exGaussian(0, σ, γ)$$
 
 # %%
-@dataclass
+@dataclass(frozen=True)
 class exGaussianError(AdditiveRVError):
     μ: float=0.
     σ: float=1.
     γ: float=0  # Gaussian
-    def __post_init__(self, seed):
+    
+    @lru_cache(None)
+    def _get_rv_args(self):
+        # NB: All special cases, which might break xroot, are dealt with in `get_rv`
+        x0 = self.xroot(self.γ)
+        K = np.sqrt(x0)
+        ω = self.σ / np.sqrt(1 + K**2)
+        return K, self.μ-ω*K, ω
+        
+    
+    def get_rv(self, seed: SeedType=None):
         # See below for explanation
         if self.γ < 0:
             raise ValueError(f"Exponentially modified Gaussian cannot have negative skew; received γ={self.γ}")
@@ -428,13 +591,12 @@ class exGaussianError(AdditiveRVError):
             raise ValueError(f"Exponentially modified Gaussian cannot have skew ≥2; received γ={self.γ}")
         elif self.γ == 0:
             # Special case for Gaussian limit
-            self.rv = stats.norm(scale=self.σ)
+            rv = stats.norm(scale=self.σ)
         else:
-            x0 = self.xroot(self.γ)
-            K = np.sqrt(x0)
-            ω = self.σ / np.sqrt(1 + K**2)
-            self.rv = stats.exponnorm(K, self.μ-ω*K, ω)
-        super().__post_init__(seed)
+            rv = stats.exponnorm(*self._get_rv_args())
+        
+        rv.random_state = self.get_rng(seed)
+        return rv
        
     @staticmethod
     def f(x, γ): return γ**2 * (1+x)**3 - 4*x**3
@@ -451,18 +613,22 @@ class exGaussianError(AdditiveRVError):
 
 
 # %% tags=["active-ipynb", "hide-input"]
-# %%opts Overlay [legend_position="top_left"]
+# %%opts Overlay [legend_position="top_right"]
+# %%opts Layout [fig_inches=3.5]
 #
 # γlst = [0, 0.1, 0.5, 1, 1.5, 1.75, 1.9]
 # σlst = [1, 2]
-# dists = {(γ, σ): exGaussianError(γ=γ, σ=σ).rv for γ in γlst for σ in σlst}
-# panels = [show_dist(d).opts(title=f"γ={γ}, σ={σ}") for (γ,σ), d in dists.items()]
-# hv.Layout(
-#     [(show_dist(stats.norm()) * hv.Text(-3, 0.25, "μ=0.00\nσ=1.00")).opts(title="Normal")]
-#     + [(p * hv.Text(*get_text_pos(p), f"μ={d.mean():.2f}\nσ={d.std():.2f}\nmedian={d.median():.2f}")).opts(title=f"γ={γ}, σ={σ}")
-#         for (γ, σ), p, d in zip(dists.keys(), panels, dists.values())]
-#     ) \
-#   .opts(shared_axes=False).cols(3)
+# dists = {(γ, σ): exGaussianError(γ=γ, σ=σ).get_rv() for γ in γlst for σ in σlst}
+# panels = [show_dist(d).opts(title=f"γ={γ}, σ={σ}", show_legend=False) for (γ,σ), d in dists.items()]
+# panels = [(show_dist(stats.norm()) * hv.Text(-3, 0.25, "μ=0.00\nσ=1.00")).opts(title="Normal")] \
+#          + [(p * hv.Text(*get_text_pos(p), f"μ={d.mean():.2f}\nσ={d.std():.2f}\nmedian={d.median():.2f}"))
+#             .opts(title=f"γ={γ}, σ={σ}", show_legend=False)
+#             for (γ, σ), p, d in zip(dists.keys(), panels, dists.values())]
+# panels[2].opts(show_legend=True)
+# hv.Layout(panels) \
+#     .opts(shared_axes=False) \
+#     .opts(hv.opts.Overlay(aspect=2, backend="matplotlib")) \
+#     .cols(3)
 
 # %% [markdown]
 # #### Conversion to scipy arguments
@@ -485,9 +651,9 @@ class exGaussianError(AdditiveRVError):
 # %% [markdown]
 # Differentiating once, we find can find the inflection points by solving the quadratic. This gives us
 #
-# $$f'(x) = 0 \text{iff} x = \frac{γ(-γ \pm 2)}{(γ + 2)(γ - 2)}$$
+# $$f'(x) = 0 \;\;\text{iff}\;\; x = \frac{γ(-γ \pm 2)}{(γ + 2)(γ - 2)}$$
 #
-# We also so (either by inspecting the graph or the expression for $f'(x)$) that $f$ has negative slope for large $x$ and the inflection points are always above the abscissa. Therefore we want the root which is to the right of the rightmost inflection point. We can enforce this with the brackets
+# We also see (either by inspecting the graph or the expression for $f'(x)$) that $f$ has negative slope for large $x$ and the inflection points are always above the abscissa. Therefore we want the root which is to the right of the rightmost inflection point. We can enforce this with the brackets
 #
 # $$x_0 \in \left(\frac{γ}{2-γ}, \infty\right)$$
 #
@@ -558,35 +724,45 @@ class exGaussianError(AdditiveRVError):
 # \end{aligned}$$
 
 # %%
-@dataclass
+@dataclass(frozen=True)
 class NormInvGaussError(AdditiveRVError):
     μ: float=0.
     σ: float=1.
     γ: float=0.   # Defaults to Gaussian
     κ: float=0.
     
-    def __post_init__(self, seed):
-        σ, γ, κ = self.σ, self.γ, self.κ
-        if γ == κ == 0:  # Special case: Gaussian distribution
-            self.rv = stats.norm(0, σ)
-        elif γ == 0:  # Special case: Symmetric distribution
+    @lru_cache(None)
+    def _get_rv_args(self):
+        # NB: Only the cases where we return norminvgauss call this function
+        μ, σ, γ, κ = self.μ, self.σ, self.γ, self.κ
+        if γ == 0:  # Special case: Symmetric distribution
             a = 3*κ
             b = 0
             ω = σ/np.sqrt(a)
             ξ = 0
-            self.rv = stats.norminvgauss(a, b, ξ, ω)
-        elif κ <= 5/3 * γ**2:
-            raise ValueError("Kurtosis (κ) and skewness (γ) must satisfy κ > 5/3 γ². Provided values:\n"
-                             f"κ     : {κ}\n5/3 γ²: {5/3*γ**2}")
         else:  # General case
             x = γ/np.sqrt(3*κ - 4*γ**2)
             c = 9*x**2 / γ**2
             a = c/np.sqrt(1-x**2)
             b = np.sign(γ) * a * x
             ω = σ * c**(3/2) / a
-            ξ = self.μ-ω*b/c
-            self.rv = stats.norminvgauss(a, b, ξ, ω)
-        super().__post_init__(seed)
+            ξ = μ-ω*b/c
+        return a, b, ξ, ω
+    
+    def get_rv(self, seed: SeedType=None):
+        μ, σ, γ, κ = self.μ, self.σ, self.γ, self.κ
+        if γ == κ == 0:  # Special case: Gaussian distribution
+            rv = stats.norm(0, σ)
+        elif γ == 0:  # Special case: Symmetric distribution
+            rv = stats.norminvgauss(*self._get_rv_args())
+        elif κ <= 5/3 * γ**2:
+            raise ValueError("Kurtosis (κ) and skewness (γ) must satisfy κ > 5/3 γ². Provided values:\n"
+                             f"κ     : {κ}\n5/3 γ²: {5/3*γ**2}")
+        else:  # General case
+            rv = stats.norminvgauss(*self._get_rv_args())
+        
+        rv.random_state = self.get_rng(seed)
+        return rv
 
 
 # %% tags=["active-ipynb", "hide-input"]
@@ -598,7 +774,7 @@ class NormInvGaussError(AdditiveRVError):
 #
 # frames = {}
 # for κγ in κγlst:
-#     dists = {γ: NormInvGaussError(σ=1, γ=γ, κ=κγ*5/3*γ**2).rv for γ in γlst}
+#     dists = {γ: NormInvGaussError(σ=1, γ=γ, κ=κγ*5/3*γ**2).get_rv() for γ in γlst}
 #     panels = [show_dist(d, f"y_{γ}").redim.range(Frequency=(0,0.5)) for γ, d in dists.items()]
 #     layout = hv.Layout([(p * hv.Text(get_text_pos(p)[0], 0.4,
 #                                      f"μ={d.mean():.2f}, median={d.median():.2f}\nσ={d.std():.2f}\nγ={d.stats('s'):.2f}\nκ={d.stats('k'):.2f}",
@@ -695,23 +871,23 @@ class NormInvGaussError(AdditiveRVError):
 # **Higher moments**  
 # - $γ = 2$
 # - $κ = 6$
-#
 
 # %%
-@dataclass
+@dataclass(frozen=True)
 class ExponentialError(AdditiveRVError):
     μ: float=0.
     σ: float=1.
     
-    def __post_init__(self, seed):
+    def get_rv(self, seed: SeedType=None):
         σ = self.σ
-        self.rv = stats.expon(self.μ-σ, σ)
-        super().__post_init__(seed)
+        rv = stats.expon(self.μ-σ, σ)
+        rv.random_state = self.get_rng(seed)
+        return rv
 
 
 # %% tags=["remove-cell", "skip-execution", "active-ipynb"]
 # for σ in [0.1, 1, 4, 8.3]:
-#     assert ExponentialError(σ=σ).rv.stats("mvsk") == (0, σ**2, 2, 6)
+#     assert ExponentialError(σ=σ).get_rv().stats("mvsk") == (0, σ**2, 2, 6)
 
 # %% [markdown]
 # ### Poisson error
@@ -739,35 +915,38 @@ class ExponentialError(AdditiveRVError):
 # ::::
 
 # %%
-@dataclass
+@dataclass(frozen=True)
 class PoissonError(AdditiveRVError):
     μ: float=0.
     σ: float=1.
     
-    def __post_init__(self, seed):
+    def get_rv(self, seed: SeedType=None):
         μ, σ = self.μ, self.σ
         λ = σ**2
-        self.rv = stats.poisson(λ, loc=μ-λ)
-        super().__post_init__(seed)
+        rv = stats.poisson(λ, loc=μ-λ)
+        rv.random_state = self.get_rng(seed)
+        return rv
 
 
 # %% tags=["remove-cell", "skip-execution", "active-ipynb"]
 # for σ in [0.1, 1, 4, 8.3]:
-#     assert PoissonError(σ=σ).rv.stats("mvsk") == (0, σ**2, 1/σ, 1/σ**2)
+#     assert PoissonError(σ=σ).get_rv().stats("mvsk") == (0, σ**2, 1/σ, 1/σ**2)
 
 # %% tags=["active-ipynb", "hide-input"]
 # %%opts Overlay [legend_position="top_right", show_legend=False]
-# %%opts Scatter (size=4)
+# %%opts Layout [fig_inches=3.5]
 #
 # σlst = [0.1, 1, 2, 4, 10]
-# dists = {σ: PoissonError(σ=σ).rv for σ in σlst}
+# dists = {σ: PoissonError(σ=σ).get_rv() for σ in σlst}
 # panels = [show_dist(d).opts(title=f"σ={σ}") for σ, d in dists.items()]
 # hv.Layout(
 #     [(p * hv.Text(*get_text_pos(p), f"μ={d.mean():.2f}, median={d.median():.2f}\nσ={d.std():.2f}\nγ={d.stats('s'):.2f}\nκ={d.stats('k'):.2f}"))
 #      .opts(title=f"σ={σ}")
 #         for σ, p, d in zip(dists.keys(), panels, dists.values())]
 #     ) \
-#   .opts(shared_axes=False).cols(3)
+#   .opts(hv.opts.Layout(shared_axes=False),
+#         hv.opts.Scatter(size=4, backend="bokeh")) \
+#   .cols(3)
 
 # %% [markdown]
 # ### Gamma error
@@ -796,35 +975,38 @@ class PoissonError(AdditiveRVError):
 # ::::
 
 # %%
-@dataclass
+@dataclass(frozen=True)
 class GammaError(AdditiveRVError):
     μ: float=0.
     σ: float=1.
     γ: float=np.sqrt(2)
     
-    def __post_init__(self, seed):
+    def get_rv(self, seed: SeedType=None):
         μ, σ, γ = self.μ, self.σ, self.γ
         k = 4 / γ**2
         θ = σ*γ/2
-        self.rv = stats.gamma(k, loc=μ-k*θ, scale=θ)
-        super().__post_init__(seed)
+        rv = stats.gamma(k, loc=μ-k*θ, scale=θ)
+
+        rv.random_state = self.get_rng(seed)
+        return rv
 
 # %% tags=["remove-cell", "skip-execution", "active-ipynb"]
 # for σ in [0.1, 1, 4, 8.3]:
 #     for γ in [0.1, 1, 4, 8.3]:
-#         assert np.allclose(GammaError(σ=σ, γ=γ).rv.stats("mvsk"),
+#         assert np.allclose(GammaError(σ=σ, γ=γ).get_rv().stats("mvsk"),
 #                            (0, σ**2, γ, 1.5*γ**2))
 
 # %% tags=["active-ipynb", "hide-input"]
 # %%opts Overlay [xlabel=""]
 # %%opts Text (color="#888888")
+# %%opts Layout [fig_inches=2.5]
 #
 # σlst = np.array([0.1, 1, 4, 8])
 # γlst = np.array([0.1, 1, 4, 8])
 #
 # frames = {}
 # for σ in σlst:
-#     dists = {γ: GammaError(σ=σ, γ=γ).rv for γ in γlst}
+#     dists = {γ: GammaError(σ=σ, γ=γ).get_rv() for γ in γlst}
 #     panels = [show_dist(d, f"y_{γ}").redim.range(Frequency=(0,0.5)) for γ, d in dists.items()]
 #     layout = hv.Layout([(p * hv.Text(get_text_pos(p)[0], 0.4,
 #                                      f"μ={d.mean():.2f}, median={d.median():.2f}\nσ={d.std():.2f}\nγ={d.stats('s'):.2f}\nκ={d.stats('k'):.2f}",
@@ -840,4 +1022,5 @@ class GammaError(AdditiveRVError):
 #           ).collate()
 
 # %% tags=["active-ipynb", "remove-input"]
-# emd_paper.footer
+# from emd_paper.utils import GitSHA
+# GitSHA()

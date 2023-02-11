@@ -1,6 +1,8 @@
 *.ipynb
 *.md
+*.myst
 build
+*.joblib-cache
 
 labnotes
 project.cfg

@@ -13,19 +13,25 @@ import math
 import numpy as np
 import dataclasses
 from collections import namedtuple
+import logging
+from inspect import unwrap
+
 import IPython
 
-from typing import ClassVar, Union, Tuple, NamedTuple
+from typing import ClassVar, Optional, Union, Tuple, NamedTuple, Literal
 from scityping.numpy import NPValue, Array
 
 import myst_nb
 
-from .config import config  # FIXME: Remove dependency on config
 from .find_sane_dt import make_int_superscript
+
+logger = logging.getLogger(__name__)
+
 
 # ## glue
 
-def glue(name, variable, display=True, print_name=True):
+def glue(name, variable, display=True, print_name=True,
+         backend: Optional[Literal['bokeh', 'matplotlib']]=None):
     """Use either `myst_nb.glue` or `myst_nb_bokeh.glue`.
     
     Which function to use is determined by inspecting the argument.
@@ -37,6 +43,15 @@ def glue(name, variable, display=True, print_name=True):
     """
     # TODO: Return a more nicely formatted object, with _repr_html_,
     #       which combines returned fig object and prints the name below
+
+    if backend is None:
+        backend = glue.default_holoviews_backend
+    if backend is None:
+        raise TypeError("Backend not specified. Either provide as argument, "
+                        "or set `glue.default_holoviews_backend`")
+    elif backend not in {"bokeh", "matplotlib"}:
+        raise ValueError("config.backend should be either 'bokeh' or 'matplotlib'")
+    
     if print_name:   
         if IPython.get_ipython():
             IPython.display.display(name)  # Should look nicer in Jupyter Book, especially when there are multiple glue statements
@@ -50,19 +65,20 @@ def glue(name, variable, display=True, print_name=True):
 
     if "holoviews" in mrostr:
         import holoviews as hv
-        if config.figures.backend == "bokeh":
+        if backend == "bokeh":
             from myst_nb_bokeh import glue_bokeh
             # Render Holoviews object to get a normal Bokeh plot
             bokeh_obj = hv.render(variable, backend="bokeh")
             return glue_bokeh(name, bokeh_obj, display)
         else:
-            assert config.figures.backend == "matplotlib", "config.backend should be either 'bokeh' or 'matplotlib'"
             # Render Holoviews object to get a normal Matplotlib plot
             mpl_obj = hv.render(variable, backend="matplotlib")
             return myst_nb.glue(name, mpl_obj, display)
 
     else:
         return myst_nb.glue(name, variable, display)
+
+glue.default_holoviews_backend = None
 
 # ## format_scientific
 
@@ -108,7 +124,7 @@ def format_scientific(a: Union[int,float], sig_digits=3) -> str:
     else:
         return f"{sgn}{i}.{f}×10{make_int_superscript(p)}"
 
-# ### Testing
+# ### Test
 
 # + tags=["active-ipynb"]
 # if __name__ == "__main__":
@@ -140,8 +156,16 @@ import numbers
 
 class SingleSeedGenerator(np.random.SeedSequence):
     """
-    Make SeedSequence callable, allowing to create different high-quality seeds
-    simply by passing different integers.
+    Make SeedSequence callable, allowing to create multiple high-quality seeds.
+    On each call, the arguments are converted to integers (via hashing), then 
+    used to produce a unique seed.
+    By default, a single integer seed is returned per call.
+    To make each call return multiple seeds, use the keyword argument `length`
+    when creating (not calling) the seed generator. When `length` is greater
+    than one, seeds are returned as NumPy vector.
+
+    .. Important:: Multiple calls with the same arguments will return the same seed.
+    .. Note:: Recommended usage is through `SeedGenerator`.
     """
     def __init__(self, *args, length=1, **kwargs):
         self.length = length  # The generated state will have this many integers
@@ -232,7 +256,7 @@ class SeedGenerator:
         return self.SeedValues(**{nm: getattr(self, nm)(key)
                                   for nm in self.SeedValues._fields})
 
-# ### Testing
+# ### Test
 
 # + tags=["active-ipynb"]
 # class SeedGen(SeedGenerator):
@@ -251,6 +275,203 @@ class SeedGenerator:
 # # generate different keys for different parameter values.
 # # assert seedgen.data("b", 4.3) != seedgen.data(4.3, "b") != seedgen.data(4.3, "a")
 # #   (Unique both in values and order)
+# -
+
+# ## Parameter collections
+
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass, field
+from itertools import product, repeat, islice
+from math import prod
+from typing import List
+
+# Allow NumPy arrays to be recognized as sequences. Other Sequence-compatible types can be added is needed, if they don't already register themselves as virtual subclasses.
+
+import numpy as np
+Sequence.register(np.ndarray);
+
+
+class expand(Sequence):
+    def __init__(self, seq: Sequence):
+        if not isinstance(seq, Sequence):
+            raise TypeError("`seq` must be a Sequence (i.e. a non-consuming iterable).\n"
+                            "If you know your argument type is compatible with a Sequence, "
+                            "you can indicate this by registering it as a virtual subclass:\n"
+                            "    from collections.abc import Sequence\n"
+                            "    Sequence.register(MyType)")
+        self._seq = seq
+    def __len__(self):
+        return self._seq.__len__()
+    def __getitem__(self, key):
+        return self._seq.__getitem__(key)
+    def __str__(self):
+        return str(self._seq)
+    def __repr__(self):
+        return f"expand({repr(self._seq)})"
+    def __eq__(self, other):
+        return self._seq == other
+
+
+@dataclass
+class ParamColl(Mapping):
+    """
+    If parameters are passed as a list, perform an outer product and return
+    a list of `ParamColl` instances.
+    
+    .. Note:: Limitation: Cannot accept list arguments, since those are
+       expanded. An improved implementation would inspect `cls.__dataclass_fields__`
+       to determine which fields to expand.
+       
+    .. Note::
+    """
+    dims = {}  # Can optionally expand this with hv.Dimension instances
+               # Missing dimensions will use the default ``hv.Dimension(θname)``
+    _lengths: List[int] = field(init=False, repr=False)
+    
+    def __post_init__(self):
+        #items = ((k, getattr(self, k)) for k in self.__dataclass_fields__ if not k.startswith("_"))
+        self._lengths = [len(v) if isinstance(v, expand) else 1 for k, v in self.items()]
+                       
+    @property
+    def outer_len(self):
+        return prod(self._lengths)
+    
+    @property
+    def inner_len(self):
+        diff_lengths = set(self._lengths) - {1}
+        if len(diff_lengths) == 0:
+            # There are no parameters to exand
+            return 1
+        elif len(diff_lengths) > 1:
+            raise ValueError("Expandable parameters do not all have the same lengths."
+                 "`expand` parameters with the following lengths were found:\n"
+                 f"{diff_lengths}")
+        else:
+            return next(iter(diff_lengths))
+    
+    def _get_kw_lst_inner(self):
+        #items = [(k, getattr(self, k)) for k in self.__dataclass_fields__]
+        #_lengths = Counter([len(v) for k, v in items if isinstance(v, expand)])
+        #diff_lengths = set(self._lengths) - {1}
+        if self.inner_len == 1:  # NB: The `inner_len` property raises ValueError if fields are not aligned
+            # There are no parameters to exand
+            #items = ((k, getattr(self, k)) for k in self.__dataclass_fields__ if not k.startswith("_"))
+            return [{k: v[0] if isinstance(v, expand) else v for k, v in self.items()}]
+        # elif len(_lengths) > 1:
+        #     raise ValueError("Expandable parameters do not all have the same lengths."
+        #                      "`expand` parameters with the following lengths were found:\n"
+        #                      f"{_lengths}")
+        else:
+            #items = ((k, getattr(self, k)) for k in self.__dataclass_fields__ if not k.startswith("_"))
+            kw = {k: v if isinstance(v, expand) else repeat(v) for k,v in self.items()}
+            return [{k: v for k, v in zip(kw.keys(), vlst)}
+                     for vlst in zip(*kw.values())]
+    
+    def _get_kw_lst_outer(self):
+        # Possible improvement: Use a custom iterable type to mark fields to expand.
+        #items = ((k, getattr(self, k)) for k in self.__dataclass_fields__ if not k.startswith("_"))
+        kw = {k: v if isinstance(v, expand) else [v] for k,v in self.items()}
+        return [{k: v for k, v in zip(kw.keys(), vlst)}
+                 for vlst in product(*kw.values())]
+        
+    def __len__(self):
+        return len(self._lengths)
+        #return self.outer_len
+        #return len(self._get_kw_lst_outer())
+                   
+    def __iter__(self):
+        yield from self.keys()
+        #yield from self.outer()
+    
+    
+    def keys(self):  # TODO: Return something nicer, like a KeysView ?
+        return [k for k in self.__dataclass_fields__ if not k.startswith("_")]
+    def __getitem__(self, key):
+        return getattr(self, key)
+    
+    # Expansion API
+    
+    def inner(self, start=None, stop=None, step=None):
+        if start is not None or stop is not None or step is not None:
+            yield from islice(self.inner(), start, stop, step)
+        else:
+            for kw in self._get_kw_lst_inner():
+                yield type(self)(**kw)
+            
+    def outer(self, start=None, stop=None, step=None):
+        if start is not None or stop is not None or step is not None:
+            yield from islice(self.outer(), start, stop, step)
+        else:
+            for kw in self._get_kw_lst_outer():
+                yield type(self)(**kw)
+    
+    @classmethod
+    @property
+    def kdims(cls):
+        return [cls.dims.get(θname, θname) for θname in cls.__dataclass_fields__]
+
+
+# ### Test
+
+# + tags=["active-ipynb"]
+# import numpy as np
+# import pytest
+# from dataclasses import asdict
+#
+# @dataclass
+# class DataParamset(ParamColl):
+#     L: int
+#     λ: float
+#     σ: float
+#     δy: float
+#
+# @dataclass
+# class ModelParamset(ParamColl):
+#     λ: float
+#     σ: float
+#     #μ: float
+
+# + tags=["active-ipynb"]
+# data_params = DataParamset(
+#     L=400,
+#     λ=1,
+#     σ=1,
+#     δy=expand([-1, -0.3, 0, 0.3, 1])
+# )
+# model_params = ModelParamset(
+#     λ=expand(np.logspace(-1, 1, 10)),
+#     σ=expand(np.linspace(0.1, 3, 8))
+# )
+# model_params_aligned = ModelParamset(
+#     λ=expand(np.logspace(-1, 1, 10)),
+#     σ=expand(np.linspace(0.1, 3, 10))
+# )
+
+# + tags=["active-ipynb"]
+# # Iterating over ParamColl returns the keys
+# assert len(list(data_params)) == len(data_params.keys()) == 4
+# assert list(data_params) == ["L", "λ", "σ", "δy"]
+#
+# # Expanding a list
+# assert list(data_params.inner()) == list(data_params.outer())
+# assert len(list(data_params.outer())) == len(data_params.δy) == data_params.outer_len == 5
+#
+# # Expanding an array + Non-aligned doesn't allow inner() iterator
+# assert len(list(model_params.outer())) == 10*8
+# with pytest.raises(ValueError):
+#     next(model_params.inner())
+#
+# # Expanding an array + Aligned expanded params allows inner() iterator
+# assert len(list(model_params_aligned.inner())) == len(model_params_aligned.λ) == model_params_aligned.inner_len == 10
+# assert len(list(model_params_aligned.outer())) == model_params_aligned.outer_len == 10*10
+#
+# assert dict(**data_params) == {k: v for k,v in asdict(data_params).items() if not k.startswith("_")}
+#
+# # Slicing inner() and outer() works as advertised
+# assert len(list(model_params_aligned.inner(2, 8))) == 6
+# assert len(list(model_params_aligned.inner(2, 8, 2))) == 3
+# assert len(list(model_params_aligned.outer(5,20)))   == 15
+# assert len(list(model_params_aligned.outer(5,20,5))) == 3
 # -
 
 # ## Plotting
@@ -321,16 +542,114 @@ def plot_secondary(plot, element):
     # Set right axis for the last glyph added to the figure
     glyph_last.y_range_name = right_axis_name
 
+# -
+
+# ## Pretty-print Git version
+# (Ported from *mackelab_toolbox.utils*)
+
+from typing import Union
+from pathlib import Path
+from datetime import datetime
+from socket import gethostname
+try:
+    import git
+except ModuleNotFoundError:
+    git = None
+
+class GitSHA:
+    """
+    Return an object that nicely prints the SHA hash of the current git commit.
+    Displays as formatted HTML in a Jupyter Notebook, otherwise a simple string.
+
+    .. Hint:: This is especially useful for including a git hash in a report
+       produced with Jupyter Book. Adding a cell `GitSHA() at the bottom of
+       notebook with the tag 'remove-input' will print the hash with no visible
+       code, as though it was part of the report footer.
+
+    Usage:
+    >>> GitSHA()
+    myproject main #3b09572a
+    """
+    css: str= "color: grey; text-align: right"
+    # Default values used when a git repository can’t be loaded
+    path  : str="No git repo found"
+    branch: str=""
+    sha   : str=""
+    hostname: str=""
+    timestamp: str=None
+    def __init__(self, path: Union[None,str,Path]=None, nchars: int=8,
+                 sha_prefix: str='#', show_path: str='stem',
+                 show_branch: bool=True, show_hostname: bool=False,
+                 datefmt: str="%Y-%m-%d"):
+        """
+        :param:path: Path to the git repository. Defaults to CWD.
+        :param:nchars: Numbers of SHA hash characters to display. Default: 8.
+        :param:sha_prefix: Character used to indicate the SHA hash. Default: '#'.
+        :param:show_path: How much of the repository path to display.
+            'full': Display the full path.
+            'stem': (Default) Only display the directory name (which often
+                    corresponds to the implied repository name)
+            'none': Don't display the path at all.
+        :param:datefmt: The format string to pass to ``datetime.strftime``.
+            To not display any time at all, use an empty string.
+            Default format is ``2000-12-31``.
+        """
+        ## Set attributes that should always work (don't depend on repo)
+        if datefmt:
+            self.timestamp = datetime.now().strftime(datefmt)
+        else:
+            self.timestamp = ""
+        if show_hostname:
+            self.hostname = gethostname()
+        else:
+            self.hostname = ""
+        ## Set attributes that depend on repository
+        # Try to load repository
+        if git is None:
+            # TODO?: Add to GitSHA a message saying that git python package is not installed ?
+            return
+        try:
+            repo = git.Repo(search_parent_directories=True)
+        except git.InvalidGitRepositoryError:
+            # Skip initialization of repo attributes and use defaults
+            return
+        self.repo = repo
+        self.sha = sha_prefix+repo.head.commit.hexsha[:nchars]
+        if show_path.lower() == 'full':
+            self.path = repo.working_dir
+        elif show_path.lower() == 'stem':
+            self.path = Path(repo.working_dir).stem
+        elif show_path.lower() == 'none':
+            self.path = ""
+        else:
+            raise ValueError("Argument `show_path` should be one of "
+                             "'full', 'stem', or 'none'")
+        self.branch = ""
+        if show_branch:
+            try:
+                self.branch = repo.active_branch.name
+            except TypeError:  # Can happen if on a detached head
+                pass
+
+    def __str__(self):
+        return " ".join((s for s in (self.timestamp, self.hostname, self.path, self.branch, self.sha)
+                         if s))
+    def __repr__(self):
+        return self.__str__()
+    def _repr_html_(self):
+        hoststr = f"&nbsp;&nbsp;&nbsp;host: {self.hostname}" if self.hostname else ""
+        return f"<p style=\"{self.css}\">{self.timestamp}{hoststr}&nbsp;&nbsp;&nbsp;git: {self.path} {self.branch} {self.sha}</p>"
 
 # -
 
 # ## Hashing
-# (Ported from *mackelab_toolbox.utils*)
+# (Ported from *mackelab_toolbox.utils*; used in SeedGenerator)
 
 import hashlib
 from collections.abc import Iterable, Sequence, Collection, Mapping
 from enum import Enum
 
+terminating_types = (str, bytes)
 
 def stablehash(o):
     """
