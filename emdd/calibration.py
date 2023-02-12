@@ -33,16 +33,16 @@ from dataclasses import dataclass, field
 import numpy as np
 from tqdm.auto import tqdm
 
-from emd_paper import Config
-from emd_paper.emd import Bconf#compute_stats_m1
-from emd_paper.path_sampling import generate_quantile_paths
-from emd_paper.memoize import memoize
+from emdd import Config
+from emdd.emd import Bconf#compute_stats_m1
+from emdd.path_sampling import generate_quantile_paths
+from emdd.memoize import memoize
 
 config = Config()
 logger = logging.getLogger(__name__)
 
 # %% [markdown]
-# from emd_paper.emd import Bconf
+# from emdd.emd import Bconf
 
 # %% tags=["remove-cell"]
 try:
@@ -68,7 +68,7 @@ except ModuleNotFoundError:
 # from numpy.random import default_rng
 # from scipy import stats
 # import pandas as pd
-# from emd_paper.utils import ParamColl, expand
+# from emdd.utils import ParamColl, expand
 # logging.basicConfig(level=logging.WARNING)
 # logger.setLevel(logging.ERROR)
 
@@ -745,7 +745,7 @@ def flatten_panels(fig: "holoviews.HoloMap", clone: bool=True) -> "holoviews.Lay
 # ncores = 12
 # total = data_params.outer_len * theoA_params.outer_len * theoB_params.outer_len  # `None` is valid but won't show the total in the progress bar
 #
-# logging.getLogger("emd_paper.emd").setLevel(logging.ERROR)
+# logging.getLogger("emdd.emd").setLevel(logging.ERROR)
 #
 # """
 # Args:
@@ -982,5 +982,5 @@ def flatten_panels(fig: "holoviews.HoloMap", clone: bool=True) -> "holoviews.Lay
 # ---
 
 # %% tags=["remove-input"]
-from emd_paper.utils import GitSHA
+from emdd.utils import GitSHA
 GitSHA()

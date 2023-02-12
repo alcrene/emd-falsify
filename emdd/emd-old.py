@@ -49,12 +49,12 @@ from scityping.numpy import Array
 FloatArray = Array[np.inexact]
 
 # %% tags=["remove-input"]
-logger = logging.getLogger("emd_paper.emd")
+logger = logging.getLogger("emdd.emd")
 
 # %% tags=["active-ipynb", "remove-input"]
-# from emd_paper import models, config
-# from emd_paper.utils import glue, SeedGenerator, get_bounds
-# from emd_paper.find_sane_dt import find_sane_dt
+# from emdd import models, config
+# from emdd.utils import glue, SeedGenerator, get_bounds
+# from emdd.find_sane_dt import find_sane_dt
 # from dataclasses import replace
 
 # %% tags=["active-py"]

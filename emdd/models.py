@@ -60,7 +60,7 @@
 # A seed may be provided both when instantiating a model, *and* when calling for samples. The idea is that we may want different “sources of unicity”: a big unique random seed for the whole project, different seeds for different experiments, different seeds for data sets within an experiment, etc. Seeds can be passed as ints or tuples, and both the instantiation and calling seeds are combined to produce a unique random state for the random number generator.
 
 # %% tags=["hide-input"]
-import emd_paper
+import emdd
 
 from abc import ABC, abstractmethod
 from collections import Counter
@@ -84,7 +84,7 @@ SeedType = Union[None,int,Tuple[int]]
 
 # %% tags=["active-ipynb", "hide-input"]
 # import holoviews as hv
-# config = emd_paper.Config()
+# config = emdd.Config()
 #
 # backend = config.figures.backend
 # colors  = config.figures.colors
@@ -1022,5 +1022,5 @@ class GammaError(AdditiveRVError):
 #           ).collate()
 
 # %% tags=["active-ipynb", "remove-input"]
-# from emd_paper.utils import GitSHA
+# from emdd.utils import GitSHA
 # GitSHA()

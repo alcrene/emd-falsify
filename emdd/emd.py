@@ -47,8 +47,8 @@ from tqdm.auto import tqdm
 from typing import Optional, Union, Any, Literal, Tuple, List, Dict, NamedTuple
 from scityping.numpy import Array
 
-from emd_paper import Config
-from emd_paper.path_sampling import generate_quantile_paths
+from emdd import Config
+from emdd.path_sampling import generate_quantile_paths
 
 config = Config()
 logger = logging.getLogger(__name__)
@@ -76,7 +76,7 @@ except ModuleNotFoundError:
 # logger.setLevel(logging.DEBUG)
 # -
 
-from emd_paper.memoize import memoize
+from emdd.memoize import memoize
 
 # + [markdown] tags=["remove-cell"]
 #     Set up caching according to configuration. Since the `lru_cache` cache only accepts hashable arguments, we wrap it with `nofail_functools_cache` which skips the caching (but at least doesn't fail) on non-hashable args.
@@ -88,7 +88,7 @@ from emd_paper.memoize import memoize
 # + [markdown] tags=["remove-cell"]
 #     if config.caching.use_disk_cache:
 #         from joblib import Memory
-#         from emd_paper.utils import nofail_joblib_cache
+#         from emdd.utils import nofail_joblib_cache
 #         memory = Memory(**config.caching.joblib.dict(exclude={"rootdir"}))
 #         def cache(func=None, **kwargs):
 #             "Combine @nofail_joblib_cache and @memory.cache into one decorator"
@@ -102,7 +102,7 @@ from emd_paper.memoize import memoize
 #
 #     else:
 #         from functools import lru_cache
-#         from emd_paper.utils import nofail_functools_cache
+#         from emdd.utils import nofail_functools_cache
 #         def cache(func=None, **kwargs):
 #             "Combine @nofail_functools_cache and @lru_cache into one decorator"
 #             warn = kwargs.pop("warn", None)
@@ -878,6 +878,6 @@ def calibration_plot(c_list: List[float], data_L: int, theory_L: int,
 # .opts(fig_inches=6, aspect=2, backend="matplotlib")
 
 # + tags=["remove-input", "active-ipynb"]
-# from emd_paper.utils import GitSHA
+# from emdd.utils import GitSHA
 # GitSHA()
 #

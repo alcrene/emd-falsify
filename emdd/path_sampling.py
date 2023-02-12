@@ -54,8 +54,8 @@ from scityping.numpy import Array, Generator as RNGenerator
 # import holoviews as hv
 # from myst_nb import glue
 #
-# from emd_paper.utils import GitSHA
-# from emd_paper import Config
+# from emdd.utils import GitSHA
+# from emdd import Config
 # config  = Config()
 #
 # hv.extension(config.figures.backend)
