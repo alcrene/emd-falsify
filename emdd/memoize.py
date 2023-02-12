@@ -23,7 +23,7 @@ try:
 except ModuleNotFoundError:
     joblib = None
 
-from config import Config
+from .config import Config
 config = Config()
 logger = logging.getLogger(__name__)
 

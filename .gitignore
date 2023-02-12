@@ -3,6 +3,7 @@
 *.myst
 build
 *.joblib-cache
+*.pytest_cache
 
 labnotes
 project.cfg

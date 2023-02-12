@@ -279,17 +279,41 @@ class SeedGenerator:
 
 # ## Parameter collections
 
-from collections.abc import Mapping, Sequence
+# import logging
+from collections.abc import Mapping, Sequence, Generator
 from dataclasses import dataclass, field
+try:
+    from dataclasses import KW_ONLY
+except ImportError:
+    # With Python < 3.10, all parameters in subclasses will need to be specified, but at least the code won’t break
+    KW_ONLY = None
 from itertools import product, repeat, islice
 from math import prod
-from typing import List
+from typing import List, Union
+from numpy.typing import ArrayLike
+try:
+    from scipy import stats
+except ModuleNotFoundError:
+    stats = None
 
 # Allow NumPy arrays to be recognized as sequences. Other Sequence-compatible types can be added is needed, if they don't already register themselves as virtual subclasses.
 
 import numpy as np
 Sequence.register(np.ndarray);
 
+Seed = Union[int, ArrayLike, np.random.SeedSequence]
+# Scipy.stats does not provide a public name for the frozen dist types
+if stats:
+    RVFrozen = type(stats.norm()).mro()[1]
+    MultiRVFrozen = type(stats.multivariate_normal()).mro()[1]
+else:
+    class RVFrozen:  # These are only used in isinstance() checks, so an empty
+        pass         # class suffices to avoid those tests failing and simply return `False`
+    class MultiRVFrozen:
+        pass
+
+class NoArg:  # Sentinel value: used to identify when no argument was passed, if
+    pass      # if `None` cannot be used for that purpose
 
 class expand(Sequence):
     def __init__(self, seq: Sequence):
@@ -315,81 +339,142 @@ class expand(Sequence):
 @dataclass
 class ParamColl(Mapping):
     """
-    If parameters are passed as a list, perform an outer product and return
-    a list of `ParamColl` instances.
-    
-    .. Note:: Limitation: Cannot accept list arguments, since those are
-       expanded. An improved implementation would inspect `cls.__dataclass_fields__`
-       to determine which fields to expand.
-       
-    .. Note::
+    A container for parameter sets, which allows expanding lists parameters.
+    Implemented as a dataclass, with an added Mapping API to facilitate use for
+    keyword arguments.
+
+    .. rubric:: Expandable parameters
+
+       - `outer()` will expand every expandable parameter separately and
+          return a new `ParamColl` for each possible combination.
+          This is akin to itertools’s `product`, or a mathematical outer product.
+       - `inner()` will expand every expandable parameter simultaneously and
+          return a new `ParamColl` for each combination.
+          This is akin to `zip`, or a mathematical inner product.
+       Parameters are made expandable by wrapping an iterable with `emdd.utils.expand`.
+
+    .. rubric:: Random parameters
+
+       So called “frozen” random variables from `scipy.stats` may be used as
+       parameters. To ensure reproducibility, in this case a seed *must* be
+       specified. (If you really want different values on each call, pass
+       `None` as the seed.)
+       If there are only random or scalar parameters, the `ParamColl` is of
+       infinite size.
+       If there are also expandable parameters, the `ParamColl` has inner/outer
+       size determined by the expandable parameters.
+
+    .. rubric:: Use as keyword arguments
+
+       The primary use case for `ParamColl` instances is as keyword arguments.
+       To make this easier, instances provide a mapping interface:
+       if ``params`` is a `ParamColl` instance, then ``f(**params)`` will pass
+       all its public attributes as keyword arguments.
+
+    .. rubric:: Private attributes
+
+       Attributes whose name start with an underscore ``_`` are private:
+       they are excluded from the values returned by
+       `.keys()`, `.values()`, `.items()`, and `.kdims`.
+
+    .. rubric:: Parameter dimensions
+       Dimension instances (such as those created with `holoviews.Dimension`)
+       can be assigned to parameters by updating the class’s `dims` dictionary.
+       Keys in `dims` should correspond to parameter names.
+       `kdims` will preferentially return the values in `dims` when a dimension
+       matching a parameter name is found, otherwise it returns the parameter name.
     """
     dims = {}  # Can optionally expand this with hv.Dimension instances
                # Missing dimensions will use the default ``hv.Dimension(θname)``
+    _       : KW_ONLY  # kw_only required, otherwise subclasses need to define defaults for all of their values
+    seed    : Union[Seed,NoArg] = field(default=NoArg)  # NB: kw_only arg here would be cleaner, but would break for Python <3.10
     _lengths: List[int] = field(init=False, repr=False)
+    _initialized: bool = field(default=False, init=False, repr=False)
     
     def __post_init__(self):
-        #items = ((k, getattr(self, k)) for k in self.__dataclass_fields__ if not k.startswith("_"))
-        self._lengths = [len(v) if isinstance(v, expand) else 1 for k, v in self.items()]
-                       
-    @property
-    def outer_len(self):
-        return prod(self._lengths)
-    
-    @property
-    def inner_len(self):
-        diff_lengths = set(self._lengths) - {1}
-        if len(diff_lengths) == 0:
-            # There are no parameters to exand
-            return 1
-        elif len(diff_lengths) > 1:
-            raise ValueError("Expandable parameters do not all have the same lengths."
-                 "`expand` parameters with the following lengths were found:\n"
-                 f"{diff_lengths}")
+        # NB: We use object.__setattr__ to avoid triggering `self.__setattr__` (and thus recursion errors and other nasties)
+        object.__setattr__(self, "_lengths",
+            [len(v) if isinstance(v, expand)
+             else math.inf if isinstance(v, RVFrozen)
+             else 1 for k, v in self.items()])
+
+        if math.inf in self._lengths:
+            if self.seed is NoArg:
+                raise TypeError("A seed is required when some of the parameters "
+                                "are specified as random variables.")
         else:
-            return next(iter(diff_lengths))
-    
-    def _get_kw_lst_inner(self):
-        #items = [(k, getattr(self, k)) for k in self.__dataclass_fields__]
-        #_lengths = Counter([len(v) for k, v in items if isinstance(v, expand)])
-        #diff_lengths = set(self._lengths) - {1}
-        if self.inner_len == 1:  # NB: The `inner_len` property raises ValueError if fields are not aligned
-            # There are no parameters to exand
-            #items = ((k, getattr(self, k)) for k in self.__dataclass_fields__ if not k.startswith("_"))
-            return [{k: v[0] if isinstance(v, expand) else v for k, v in self.items()}]
-        # elif len(_lengths) > 1:
-        #     raise ValueError("Expandable parameters do not all have the same lengths."
-        #                      "`expand` parameters with the following lengths were found:\n"
-        #                      f"{_lengths}")
-        else:
-            #items = ((k, getattr(self, k)) for k in self.__dataclass_fields__ if not k.startswith("_"))
-            kw = {k: v if isinstance(v, expand) else repeat(v) for k,v in self.items()}
-            return [{k: v for k, v in zip(kw.keys(), vlst)}
-                     for vlst in zip(*kw.values())]
-    
-    def _get_kw_lst_outer(self):
-        # Possible improvement: Use a custom iterable type to mark fields to expand.
-        #items = ((k, getattr(self, k)) for k in self.__dataclass_fields__ if not k.startswith("_"))
-        kw = {k: v if isinstance(v, expand) else [v] for k,v in self.items()}
-        return [{k: v for k, v in zip(kw.keys(), vlst)}
-                 for vlst in product(*kw.values())]
+            if self.seed is not NoArg:
+                logger.info("A seed is not necessary if none of the arguments "
+                            "are random. It was set to `NoArg` to ensure "
+                            "consistent hashes.")
+                object.__setattr__(self, "seed", NoArg)
+
+        object.__setattr__(self, "_initialized", True)
+
+    # Rerun __post_init__ every time a parameter is changed
+    def __setattr__(self, attr, val):
+        super().__setattr__(attr, val)
+        if self._initialized:
+            self.__post_init__()
         
+    ## Mapping API ##
+
     def __len__(self):
         return len(self._lengths)
-        #return self.outer_len
-        #return len(self._get_kw_lst_outer())
                    
     def __iter__(self):
         yield from self.keys()
-        #yield from self.outer()
     
-    
-    def keys(self):  # TODO: Return something nicer, like a KeysView ?
-        return [k for k in self.__dataclass_fields__ if not k.startswith("_")]
+    @classmethod
+    def keys(cls):  # TODO: Return something nicer, like a KeysView ?
+        return [k for k in cls.__dataclass_fields__
+                if not k.startswith("_") and k not in ParamColl.__dataclass_fields__]  # Exclude private fields and those in the base class
     def __getitem__(self, key):
         return getattr(self, key)
+
+    ## Other descriptors ##
+
+    @classmethod
+    @property
+    def kdims(cls):
+        return [cls.dims.get(θname, θname) for θname in self.keys()]
     
     # Expansion API
+                       
+    @property
+    def outer_len(self):
+        """
+        The length of the iterable created by `outer()`.
+        
+        If outer products are not supported the outer length is `None`.
+        (This happens if the parameter iterables are all infinite)
+        """
+        L = prod(self._lengths)
+        if L != math.inf:
+            return L 
+        else:
+            # If there are only lengths 1 or inf, we return inf
+            # Otherwise, the iterator will terminate once the finite expansians are done
+            L = prod(l for l in self._lengths if l < math.inf)
+            return L if L != 1 else None
+    
+    @property
+    def inner_len(self):
+        """
+        The length of the iterable created by `inner()`.
+
+        If inner products are not supported, the inner length is `None`.
+        """
+        diff_lengths = set(self._lengths) - {1}
+        if len(diff_lengths - {math.inf}) > 1:
+            return None
+        elif diff_lengths == {math.inf}:
+            return math.inf
+        elif len(diff_lengths) == 0:
+            # There are no parameters to exand
+            return 1
+        else:
+            return next(iter(diff_lengths - {math.inf}))  # Length is that of the non-infinite iterator
     
     def inner(self, start=None, stop=None, step=None):
         if start is not None or stop is not None or step is not None:
@@ -404,11 +489,69 @@ class ParamColl(Mapping):
         else:
             for kw in self._get_kw_lst_outer():
                 yield type(self)(**kw)
+
+    ## Private methods ##
+   
+    def get_rng(self):
+        return np.random.Generator(np.random.PCG64(self.seed))
+
+    @staticmethod
+    def _make_rv_iterator(rv, random_state, size=None, max_chunksize=1024):
+        """
+        Return an amortized infinite iterator: each `rvs` call requests twice
+        as many samples as the previous call, up to `max_chunksize`.
+        """
+        if size is None:
+            # Size unknown: Return an amortized infinite iterator
+            chunksize = 1
+            while True:
+                chunksize = min(chunksize, max_chunksize)
+                yield from rv.rvs(chunksize, random_state=random_state)
+                chunksize *= 2
+        else:
+            # Size known: draw that many samples immediately
+            k = 0
+            while k < size:
+                chunksize = min(size-k, max_chunksize)
+                yield from rv.rvs(chunksize, random_state=random_state)
+                k += chunksize
+
+    def _get_kw_lst_inner(self):
+        if self.seed is not NoArg:
+            rng = self.get_rng()
+        inner_len = self.inner_len
+        if inner_len is None:
+            diff_lengths = set(self._lengths) - {1}
+            raise ValueError("Expandable parameters do not all have the same lengths."
+                 "`expand` parameters with the following lengths were found:\n"
+                 f"{diff_lengths}")
+        elif inner_len == 1:
+            # There are no parameters to exand  (this implies in particular that there are no random parameters)
+            return [{k: v[0] if isinstance(v, expand)
+                        else v for k, v in self.items()}]
+        else:
+            kw = {k: v if isinstance(v, expand)
+                  else self._make_rv_iterator(v, rng, inner_len)
+                    if isinstance(v, (RVFrozen, MultiRVFrozen))
+                  else repeat(v) for k,v in self.items()}
+            for vlst in zip(*kw.values()):
+                yield {k: v for k, v in zip(kw.keys(), vlst)}
     
-    @classmethod
-    @property
-    def kdims(cls):
-        return [cls.dims.get(θname, θname) for θname in cls.__dataclass_fields__]
+    def _get_kw_lst_outer(self):
+        if self.seed is not NoArg:
+            rng = self.get_rng()
+        outer_len = self.outer_len
+        if outer_len is None:
+            raise ValueError("An 'outer' product of only infinite iterators "
+                             "does not really make sense. Use 'inner' to "
+                             "create an infinite parameter iterator.")
+        kw = {k: v if isinstance(v, expand)
+                 else [self._make_rv_iterator(v, rng, outer_len)]  # NB: We don’t want `product`
+                    if isinstance(v, (RVFrozen, MultiRVFrozen))    #     to expand the RV iterator
+                 else [v] for k,v in self.items()}
+        for vlst in product(*kw.values()):
+            yield {k: next(v) if isinstance(v, Generator) else v   # `Generator` is for the RV iterator
+                   for k, v in zip(kw.keys(), vlst)}               # Ostensibly we could support other generators ?
 
 
 # ### Test
