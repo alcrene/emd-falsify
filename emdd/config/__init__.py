@@ -30,20 +30,15 @@ class Config(ValidatingConfig):
         # labnotesdir: Path
         figuresdir : Path
 
-        # _prepent_rootdir = prepend_rootdir("figuresdir")
+        # _prepend_rootdir = prepend_rootdir("figuresdir")
 
         # _ensure_dir_exists = ensure_dir_exists("figuresdir")
         
         _prepend_rootdir = validator("figuresdir",
                                      allow_reuse=True
                                     )(prepend_rootdir)
-        _ensure_dir_exists = validator("figuresdir")(ensure_dir_exists)
-
-        # @validator("figuresdir")
-        # def ensure_dir_exists(cls, dirpath):
-        #     if dirpath:
-        #         os.makedirs(dirpath, exist_ok=True)
-        #     return dirpath
+        _ensure_dir_exists = validator("figuresdir", allow_reuse=True
+                                      )(ensure_dir_exists)
 
     class random:
         entropy: int

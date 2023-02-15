@@ -7,18 +7,18 @@ from emdd.utils import ParamColl, expand
 
 def test_ParamColl():
 
+    # (Default param values are required for tests to run on Python <3.10)
     @dataclass
     class DataParamset(ParamColl):
-        L: int
-        λ: float
-        σ: float
-        δy: float
+        L: int    = 100
+        λ: float  = 1
+        σ: float  = 1
+        δy: float = 0.1
 
     @dataclass
     class ModelParamset(ParamColl):
-        λ: float
-        σ: float
-        #μ: float
+        λ: float  = 1
+        σ: float  = 1
 
     #
     data_params = DataParamset(
@@ -55,7 +55,7 @@ def test_ParamColl():
     assert len(list(model_params_aligned.outer())) == model_params_aligned.outer_len == 10*10
 
     assert dict(**data_params) == {k: v for k,v in asdict(data_params).items()
-                                      if not k.startswith("_") and k not in {"seed"}}
+                                      if not k.startswith("_") and k not in {"seed", "inner_len"}}
 
     # Slicing inner() and outer() works as advertised
     assert len(list(model_params_aligned.inner(2, 8))) == 6
@@ -116,9 +116,42 @@ def test_ParamColl():
     data_params.δy = stats.uniform(-1, 1)
     with pytest.raises(ValueError):
         list(zip(data_params.outer(), range(10)))
-    it = data_params.inner()  # Infinite iterator
-    old_p = next(it)
-    for _ in range(100):
-        p = next(it)
-        assert p.σ != old_p.σ  # All generated values are different
-        old_p = p
+    σvals = [p.σ for p, _ in zip(data_params.inner(), range(100))]  # Infinite iterate: use range(100) to truncate
+    assert len(σvals) == 100  # All generated values are different
+
+    # Can set the inner length to convert from infinite to finite collection
+    data_params.inner_len = 10
+    σvals2 = [p.σ for p in data_params.inner()]
+    assert len(σvals2) == 10
+    assert σvals2 == σvals[:10]
+
+# Test that the seed leads to reproducible parameter sets across runs
+# IMPORTANT: This test needs to be run twice, in *separate* processes. The easiest way to do that is to 
+def test_ParamColl_reproducible():
+    @dataclass
+    class ModelParamset(ParamColl):
+        λ: float = 1
+        σ: float = 1
+
+    model_params = ModelParamset(
+        λ=stats.norm(),
+        σ=stats.norm(),
+        seed=314
+    )
+    s = str([dict(**p) for p in model_params.inner(1)])
+
+    fname = "emdd-test-paramcoll-reproducible.txt"
+    try:
+        with open(fname, 'r') as f:
+            s2 = f.read()
+    except FileNotFoundError:
+        with open(fname, 'w') as f:
+            f.write(s)
+    else:
+        assert s == s2, "Random ParamColls are not consistent across processes, even with fixed " \
+            "seed. To catch this error, the `test_ParamColl_reproducible` test needs to be run " \
+            "*twice* (which is why this error may have been missed on a first run). " \
+            f"Once the problem is fixed, you need to delete the artifact `{fname}` then run the " \
+            "test again twice."
+
+test_ParamColl_reproducible()

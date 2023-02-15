@@ -187,7 +187,10 @@ class SingleSeedGenerator(np.random.SeedSequence):
         if self.length == 1:
             seed = seed[0]
         return seed
-
+    def __str__(self):
+        "Returns a shorter string than `SeedSequence`, more appropriate for being "
+        "part of an argument list. Entropy is not printed and keywords removed"
+        return f"{type(self).__qualname__}({self.spawn_key})"
 
 @dataclasses.dataclass
 class SeedGenerator:
@@ -287,10 +290,13 @@ try:
 except ImportError:
     # With Python < 3.10, all parameters in subclasses will need to be specified, but at least the code won’t break
     KW_ONLY = None
-from itertools import product, repeat, islice
+from itertools import chain, product, repeat, islice
 from math import prod
-from typing import List, Union
-from numpy.typing import ArrayLike
+from typing import List, Union, Any
+try:
+    from numpy.typing import ArrayLike
+except:
+    ArrayLike = "ArrayLike"
 try:
     from scipy import stats
 except ModuleNotFoundError:
@@ -304,8 +310,8 @@ Sequence.register(np.ndarray);
 Seed = Union[int, ArrayLike, np.random.SeedSequence]
 # Scipy.stats does not provide a public name for the frozen dist types
 if stats:
-    RVFrozen = type(stats.norm()).mro()[1]
-    MultiRVFrozen = type(stats.multivariate_normal()).mro()[1]
+    RVFrozen = next(C for C in type(stats.norm()).mro() if "frozen" in C.__name__.lower())
+    MultiRVFrozen = next(C for C in type(stats.multivariate_normal()).mro() if "frozen" in C.__name__.lower())
 else:
     class RVFrozen:  # These are only used in isinstance() checks, so an empty
         pass         # class suffices to avoid those tests failing and simply return `False`
@@ -359,8 +365,9 @@ class ParamColl(Mapping):
        parameters. To ensure reproducibility, in this case a seed *must* be
        specified. (If you really want different values on each call, pass
        `None` as the seed.)
-       If there are only random or scalar parameters, the `ParamColl` is of
-       infinite size.
+       If there are only random (and possibly scalar parameters), the `ParamColl`
+       is of infinite size. To make it a finite iterator, set the `inner_len`
+       attribute.
        If there are also expandable parameters, the `ParamColl` has inner/outer
        size determined by the expandable parameters.
 
@@ -383,15 +390,59 @@ class ParamColl(Mapping):
        Keys in `dims` should correspond to parameter names.
        `kdims` will preferentially return the values in `dims` when a dimension
        matching a parameter name is found, otherwise it returns the parameter name.
+
+    .. rubric:: Reserved names
+       The following names are used for either attributes or methods of the
+       base class, and therefore should not be used as parameter names:
+       - dims
+       - kdims
+       - seed
+       - inner_len
+       - outer_len
+       - inner
+       - outer
+       - keys
+       - values
+       - items
+
+    .. rubric:: Hashing
+       Parameter colls can be made hashable by specifying ``unsafe_hash=True``
+       to the dataclass
+
+       .. code::python
+          @dataclass(unsafe_hash=True)
+          class MyParams(ParamColl):
+            ...
+
+       Hashes are then computed according to the parameter names, parameter
+       values and their seed. (Internally managed attributes are excluded from
+       the hash). One reason to make parameter colls hashable is to use them as
+       dictionary keys. Note however, that since they are also mutable, this
+       breaks the Python convention that only immutable objects are hashable.
+       In short, if you choose to modify a `ParamColl` instance after creation,
+       avoid also using its hash; hashing its children (for example the param
+       colls produced with `inner` or `outer`) is fine. Note that is always
+       possibly to create a new parameter collection instead of mutating an old
+       one.
     """
     dims = {}  # Can optionally expand this with hv.Dimension instances
                # Missing dimensions will use the default ``hv.Dimension(θname)``
-    _       : KW_ONLY  # kw_only required, otherwise subclasses need to define defaults for all of their values
-    seed    : Union[Seed,NoArg] = field(default=NoArg)  # NB: kw_only arg here would be cleaner, but would break for Python <3.10
-    _lengths: List[int] = field(init=False, repr=False)
-    _initialized: bool = field(default=False, init=False, repr=False)
+    _       : KW_ONLY = None  # kw_only required, otherwise subclasses need to define defaults for all of their values. Assigning `= None` allows this to work for <3.10
+    seed    : Union[Seed,NoArg] = field(default=NoArg, repr=None)  # NB: kw_only arg here would be cleaner, but would break for Python <3.10
+    inner_len: Optional[int]  = field(repr=False)                                               # A default value has no effect because this is a @property
+    _inner_len: Optional[int] = field(default=None, init=False, repr=False, compare=False)  # Default is used in place of `inner_len` default on instantiation – see inner_len.setter
+
+    _lengths: List[int] = field(init=False, repr=False, compare=False)
+    _initialized: bool = field(default=False, init=False, repr=False, compare=False)
     
     def __post_init__(self):
+
+        self._update_lengths()
+        self._validate_inner_len()
+
+        object.__setattr__(self, "_initialized", True)
+
+    def _update_lengths(self):
         # NB: We use object.__setattr__ to avoid triggering `self.__setattr__` (and thus recursion errors and other nasties)
         object.__setattr__(self, "_lengths",
             [len(v) if isinstance(v, expand)
@@ -402,21 +453,50 @@ class ParamColl(Mapping):
             if self.seed is NoArg:
                 raise TypeError("A seed is required when some of the parameters "
                                 "are specified as random variables.")
-        else:
-            if self.seed is not NoArg:
-                logger.info("A seed is not necessary if none of the arguments "
-                            "are random. It was set to `NoArg` to ensure "
-                            "consistent hashes.")
-                object.__setattr__(self, "seed", NoArg)
+            if len(set(self._name_to_seed(name) for name in self.keys())) != len(self):  # pragma: no cover
+                key_seeds = {name: self._name_to_seed(name) for name in self.keys()}
+                logger.warning("By some extremely unlikely coincidence, two of your "
+                               "parameter names hash to the same integer value. "
+                               "To ensure reproducible draws, you may want to change "
+                               "one of your argument names. Hash values are:\n"
+                               f"{key_seeds}")
 
-        object.__setattr__(self, "_initialized", True)
+    def _validate_inner_len(self):
+        if self._inner_len is not None:
+            if (set(self._lengths) - {1, math.inf}):
+                logger.warning("Setting the inner length when there are finitely "
+                               "expandable parameters has no effect.")
+            elif set(self._lengths) == {1}:
+                logger.warning("Setting the inner length when there are no "
+                               "expandable or random parameters has no effect.")
 
     # Rerun __post_init__ every time a parameter is changed
     def __setattr__(self, attr, val):
         super().__setattr__(attr, val)
-        if self._initialized:
-            self.__post_init__()
-        
+        if self._initialized and attr not in ParamColl.__dataclass_fields__:
+            self._update_lengths()
+
+    def __str__(self):
+        """
+        Compared to dataclass’ default __str__:
+        - Shorter, more informative display of scipy distributions.
+        - Only show `seed` if it is set; also, place seed argument at the end.
+        """
+        argstr = []
+        for name, v in self.items():
+            if isinstance(v, RVFrozen):
+                # RVFrozen instance all follow a standard pattern, which we can use for better str representation
+                # Unfortunately MultiRVFrozen types are not so standardized
+                subargstrs = [str(a) for a in v.args]
+                subargstrs += [f"{subk}={subv}"
+                               for subk,subv in v.kwds.items()]
+                argstr.append(f"{v.dist.name}({', '.join(subargstrs)})")
+            else:
+                argstr.append(f"{name}={v}")
+        if self.seed is not NoArg:
+            argstr.append(f", seed={self.seed}")
+        return f"{type(self).__qualname__}({', '.join(argstr)})"
+
     ## Mapping API ##
 
     def __len__(self):
@@ -437,8 +517,8 @@ class ParamColl(Mapping):
     @classmethod
     @property
     def kdims(cls):
-        return [cls.dims.get(θname, θname) for θname in self.keys()]
-    
+        return [cls.dims.get(θname, θname) for θname in cls.keys()]
+
     # Expansion API
                        
     @property
@@ -464,19 +544,34 @@ class ParamColl(Mapping):
         The length of the iterable created by `inner()`.
 
         If inner products are not supported, the inner length is `None`.
+        This happens when expandable parameters don't all have the same length.
         """
         diff_lengths = set(self._lengths) - {1}
         if len(diff_lengths - {math.inf}) > 1:
             return None
         elif diff_lengths == {math.inf}:
-            return math.inf
+            return math.inf if self._inner_len is None else self._inner_len
         elif len(diff_lengths) == 0:
             # There are no parameters to exand
             return 1
         else:
             return next(iter(diff_lengths - {math.inf}))  # Length is that of the non-infinite iterator
+
+    @inner_len.setter
+    def inner_len(self, value):
+        if isinstance(value, property):
+            # This is the initial instantiation, and no value was passed for `inner_len`
+            self._inner_len = self.__dataclass_fields__["_inner_len"].default  # NB: The "inner_len" default is actually the `property` object, even when we provide a default in the annotations
+        else:
+            self._inner_len = value
+            self._validate_inner_len()
     
     def inner(self, start=None, stop=None, step=None):
+        """
+        If only `start` is provided, it sets the maximum length of the iterator.
+        """
+        if start is not None and stop is None:
+            start, stop = 0, start
         if start is not None or stop is not None or step is not None:
             yield from islice(self.inner(), start, stop, step)
         else:
@@ -484,6 +579,11 @@ class ParamColl(Mapping):
                 yield type(self)(**kw)
             
     def outer(self, start=None, stop=None, step=None):
+        """
+        If only `start` is provided, it sets the maximum length of the iterator.
+        """
+        if start is not None and stop is None:
+            start, stop = 0, start
         if start is not None or stop is not None or step is not None:
             yield from islice(self.outer(), start, stop, step)
         else:
@@ -491,34 +591,38 @@ class ParamColl(Mapping):
                 yield type(self)(**kw)
 
     ## Private methods ##
-   
-    def get_rng(self):
-        return np.random.Generator(np.random.PCG64(self.seed))
 
-    @staticmethod
-    def _make_rv_iterator(rv, random_state, size=None, max_chunksize=1024):
+    def _name_to_seed(self, name: str):
+        # SeedSequence expects a uint32, which is exactly 4 bytes.
+        # stableintdigest(4) returns an integer exactly between 0 and 2**32
+        return stableintdigest(name)
+
+    def _make_rv_iterator(self, rv: Any, key: str, size: Optional[int]=None, max_chunksize: int=1024):
         """
         Return an amortized infinite iterator: each `rvs` call requests twice
         as many samples as the previous call, up to `max_chunksize`.
         """
+        seed = self.seed
+        if isinstance(seed, np.random.SeedSequence):
+            seed = seed.generate_state(1)
+        rng = np.random.Generator(np.random.PCG64((
+            seed, self._name_to_seed(key))))
         if size is None:
             # Size unknown: Return an amortized infinite iterator
             chunksize = 1
             while True:
                 chunksize = min(chunksize, max_chunksize)
-                yield from rv.rvs(chunksize, random_state=random_state)
+                yield from rv.rvs(chunksize, random_state=rng)
                 chunksize *= 2
         else:
             # Size known: draw that many samples immediately
             k = 0
             while k < size:
                 chunksize = min(size-k, max_chunksize)
-                yield from rv.rvs(chunksize, random_state=random_state)
+                yield from rv.rvs(chunksize, random_state=rng)
                 k += chunksize
 
     def _get_kw_lst_inner(self):
-        if self.seed is not NoArg:
-            rng = self.get_rng()
         inner_len = self.inner_len
         if inner_len is None:
             diff_lengths = set(self._lengths) - {1}
@@ -531,22 +635,20 @@ class ParamColl(Mapping):
                         else v for k, v in self.items()}]
         else:
             kw = {k: v if isinstance(v, expand)
-                  else self._make_rv_iterator(v, rng, inner_len)
+                  else self._make_rv_iterator(v, k, inner_len)
                     if isinstance(v, (RVFrozen, MultiRVFrozen))
                   else repeat(v) for k,v in self.items()}
             for vlst in zip(*kw.values()):
                 yield {k: v for k, v in zip(kw.keys(), vlst)}
     
     def _get_kw_lst_outer(self):
-        if self.seed is not NoArg:
-            rng = self.get_rng()
         outer_len = self.outer_len
         if outer_len is None:
             raise ValueError("An 'outer' product of only infinite iterators "
                              "does not really make sense. Use 'inner' to "
                              "create an infinite parameter iterator.")
         kw = {k: v if isinstance(v, expand)
-                 else [self._make_rv_iterator(v, rng, outer_len)]  # NB: We don’t want `product`
+                 else [self._make_rv_iterator(v, k, outer_len)]  # NB: We don’t want `product`
                     if isinstance(v, (RVFrozen, MultiRVFrozen))    #     to expand the RV iterator
                  else [v] for k,v in self.items()}
         for vlst in product(*kw.values()):
@@ -555,67 +657,8 @@ class ParamColl(Mapping):
 
 
 # ### Test
-
-# + tags=["active-ipynb"]
-# import numpy as np
-# import pytest
-# from dataclasses import asdict
 #
-# @dataclass
-# class DataParamset(ParamColl):
-#     L: int
-#     λ: float
-#     σ: float
-#     δy: float
-#
-# @dataclass
-# class ModelParamset(ParamColl):
-#     λ: float
-#     σ: float
-#     #μ: float
-
-# + tags=["active-ipynb"]
-# data_params = DataParamset(
-#     L=400,
-#     λ=1,
-#     σ=1,
-#     δy=expand([-1, -0.3, 0, 0.3, 1])
-# )
-# model_params = ModelParamset(
-#     λ=expand(np.logspace(-1, 1, 10)),
-#     σ=expand(np.linspace(0.1, 3, 8))
-# )
-# model_params_aligned = ModelParamset(
-#     λ=expand(np.logspace(-1, 1, 10)),
-#     σ=expand(np.linspace(0.1, 3, 10))
-# )
-
-# + tags=["active-ipynb"]
-# # Iterating over ParamColl returns the keys
-# assert len(list(data_params)) == len(data_params.keys()) == 4
-# assert list(data_params) == ["L", "λ", "σ", "δy"]
-#
-# # Expanding a list
-# assert list(data_params.inner()) == list(data_params.outer())
-# assert len(list(data_params.outer())) == len(data_params.δy) == data_params.outer_len == 5
-#
-# # Expanding an array + Non-aligned doesn't allow inner() iterator
-# assert len(list(model_params.outer())) == 10*8
-# with pytest.raises(ValueError):
-#     next(model_params.inner())
-#
-# # Expanding an array + Aligned expanded params allows inner() iterator
-# assert len(list(model_params_aligned.inner())) == len(model_params_aligned.λ) == model_params_aligned.inner_len == 10
-# assert len(list(model_params_aligned.outer())) == model_params_aligned.outer_len == 10*10
-#
-# assert dict(**data_params) == {k: v for k,v in asdict(data_params).items() if not k.startswith("_")}
-#
-# # Slicing inner() and outer() works as advertised
-# assert len(list(model_params_aligned.inner(2, 8))) == 6
-# assert len(list(model_params_aligned.inner(2, 8, 2))) == 3
-# assert len(list(model_params_aligned.outer(5,20)))   == 15
-# assert len(list(model_params_aligned.outer(5,20,5))) == 3
-# -
+# See [unit tests](../test/test_utils.py).
 
 # ## Plotting
 
@@ -783,10 +826,8 @@ class GitSHA:
         hoststr = f"&nbsp;&nbsp;&nbsp;host: {self.hostname}" if self.hostname else ""
         return f"<p style=\"{self.css}\">{self.timestamp}{hoststr}&nbsp;&nbsp;&nbsp;git: {self.path} {self.branch} {self.sha}</p>"
 
-# -
-
 # ## Hashing
-# (Ported from *mackelab_toolbox.utils*; used in SeedGenerator)
+# (Ported from *mackelab_toolbox.utils*; used in `SeedGenerator` and `ParamColl`.)
 
 import hashlib
 from collections.abc import Iterable, Sequence, Collection, Mapping

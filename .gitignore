@@ -7,3 +7,4 @@ build
 
 labnotes
 project.cfg
+test/*.txt
