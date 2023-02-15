@@ -251,15 +251,16 @@ def compute_stats_m1(data: "array_like", logp: Callable,
     Parameters
     ----------
     data: The observed data.
-    logp: Log likelihood function, as given by the model we want to characterize.
+    logp: Log probability function, as given by the model we want to characterize.
        Must support the vectorized operation ``logp(data)``.
+       Function should typically correspond to either the likelihood, or likelihood x priors.
     model_samples: A data set drawn from the model we want to characterize.
        Must have the same format as `data`, but need not have the same number of samples.
        This must be equivalent to samples drawn from the distribution specified by `logp`.
        (So in theory a Monte Carlo sampler for `logp` could be used to generate them.)
        This is used to estimate the model's quantile function (aka PPF).
        Exactly one of `model_samples` and `model_ppf` must be specified.
-    model_ppf: Instead of specifying a model sampler, if a closed form for the
+    model_ppf: Instead of specifying model samples, if a closed form for the
        PPF (point probability function, aka quantile function) is known,
        that can be given directly as a callable.
        It must support vectorized operations on NumPy arrays.
@@ -278,7 +279,7 @@ def compute_stats_m1(data: "array_like", logp: Callable,
        (i.e. ``stderr / |μ1|``). If this is exceeded after taking `R` path samples,
        the number of path samples is increased until we are under tolerance, or we have
        drawn 1000 samples. A warning is displayed if 1000 paths does not achieve tolerance.
-    progbar: Control whether to create progress bar or use an existing one.
+    path_progbar: Control whether to create progress bar or use an existing one.
        - With the default value 'auto', a new tqdm progress is created.
          This is convenient, however it can lead to many bars being created &
          destroyed if this function is called within a loop.
@@ -430,17 +431,73 @@ CallableLike = Union[Callable, Tuple[Callable, Mapping]]
 
 # -
 
-@memoize(ignore=["progbarA", "progbarB"])
-def Bconf(data: "array_like",
-          logpA: CallableLike, logpB: CallableLike,
-          model_samplesA: "array_like"=None, model_samplesB: "array_like"=None,
-          *, model_ppfA: Callable=None, model_ppfB: Callable=None,
-          c: float=None,
-          res: int=7, N: int=100, R: int=30, relstderr_tol: float=4e-3,
-          progbarA: Union[tqdm,Literal['auto'],None]='auto',
-          progbarB: Union[tqdm,Literal['auto'],None]='auto',
-          use_multiprocessing: bool=True
-         ) -> float:
+@memoize(ignore=["progbarA", "progbarB", "use_multiprocessing"])
+def Bemd(data: "array_like",
+         logpA: CallableLike, logpB: CallableLike,
+         model_samplesA: "array_like"=None, model_samplesB: "array_like"=None,
+         *, model_ppfA: Callable=None, model_ppfB: Callable=None,
+         c: float=None,
+         res: int=7, N: int=100, R: int=30, relstderr_tol: float=4e-3,
+         progbarA: Union[tqdm,Literal['auto'],None]='auto',
+         progbarB: Union[tqdm,Literal['auto'],None]='auto',
+         use_multiprocessing: bool=True
+        ) -> float:
+
+    """
+    Parameters
+    ----------
+    data: The observed data.
+    logpA, logpB: Log probability functions, as given by the model we want to characterize.
+       Must support the vectorized operation ``logp(data)``.
+       Functions should typically correspond to either the likelihood, or likelihood x priors.
+    model_samplesA, model_samplesB: Data sets drawn from the models we want to characterize.
+       Must have the same format as `data`, but need not have the same number of samples.
+       This must be equivalent to samples drawn from the distribution specified by `logp`.
+       (So in theory a Monte Carlo sampler for `logp` could be used to generate them.)
+       This is used to estimate the model's quantile function (aka PPF).
+       Exactly one of `model_samples` and `model_ppf` must be specified.
+    model_ppfA, model_ppfB: Instead of specifying model samples, if a closed form for the
+       PPF (point probability function, aka quantile function) is known,
+       that can be given directly as a callable.
+       It must support vectorized operations on NumPy arrays.
+       Exactly one of `model_samples` and `model_ppf` must be specified.
+    c: (Required; keyword only) Proportionality constant between EMD and path sampling variance.
+    res: Controls the resolution of the random quantile paths generated to compute statistics.
+       Paths have length ``2**res + 1``; typical values of `res` are 6, 7 and 8, corresponding
+       to paths of length 64, 128 and 256. Smaller may be useful to accelerate debugging,
+       but larger values are unlikely to be useful.
+    R: The minimum number of paths over which to average.
+       Actual number may be more, to achieve the specified standard error.
+    max_R: The maximum number of paths over which to average.
+       This serves to prevent runaway computation in case the specified
+       standard error is too low.
+    relstderr_tol: The maximum relative standard error on the moments we want to allow.
+       (i.e. ``stderr / |μ1|``). If this is exceeded after taking `R` path samples,
+       the number of path samples is increased until we are under tolerance, or we have
+       drawn 1000 samples. A warning is displayed if 1000 paths does not achieve tolerance.
+    progbarA, probgbarB: Control whether to create progress bar or use an existing one.
+       These progress bars track the number of generated quantile paths.
+       - With the default value 'auto', a new tqdm progress is created.
+         This is convenient, however it can lead to many bars being created &
+         destroyed if this function is called within a loop.
+       - To prevent this, a tqdm progress bar can be created externally (e.g. with
+         ``tqdm(desc="Generating paths")``) and passed as argument.
+         Its counter will be reset to zero, and its set total to `R` + `previous_R`.
+       - A value of `None` prevents displaying any progress bar.
+    use_multiprocessing: If `True`, the statistics for models A and B are
+       computed simultaneously; otherwise they are computed sequentially.
+       Default is `True`.
+       One reason not to use multiprocessing is if this call is part of a
+       higher-level loop with is itself parallelized: child multiprocessing
+       processes can’t spawn their own child processes.
+
+    TODO
+    ----
+    - Use separate threads to update progress bars. This should minimize their
+      tendency to lag behind the actual number of sampled paths.
+    """
+
+
     # NB: Most of this function is just managing mp processes and progress bars
     if isinstance(progbarA, tqdm):
         close_progbarA = False  # Closing a progbar prevents it from being reused
