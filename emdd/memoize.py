@@ -133,11 +133,12 @@ if joblib:
         def __call__(self, *args, **kwargs):
             try:
                 return super().__call__(*args, **kwargs)
-            except PicklingError:
+            except PicklingError as e:
                 # Uncached branch
                 if self.warn:
                     logger.warning(f"Calling unmemoized form of {self.__qualname__} "
-                                   "because some arguments cannot be pickled. "
+                                   "because some arguments cannot be pickled:\n"
+                                   f"{e.args[0]}\n"  # args[1] can be very long and drown the log message
                                    "To avoid log spam, this message will not be repeated.")
                     self.warn = False
                 return self.func(*args, **kwargs)
