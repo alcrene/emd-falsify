@@ -64,7 +64,7 @@ import emdd
 
 from abc import ABC, abstractmethod
 from collections import Counter
-from collections.abc import Callable
+from collections.abc import Callable, Sequence
 from functools import lru_cache
 from dataclasses import dataclass, InitVar
 from typing import Union, Tuple
@@ -167,6 +167,20 @@ SeedType = Union[None,int,Tuple[int]]
 #
 # :::
 
+# %%
+class Model(ABC):
+    @abstractmethod
+    def __call__(self, *arg):
+        raise NotImplementedError
+
+
+# %%
+@dataclass(frozen=True)
+class FullModel:
+    phys: Model
+    obs : Model
+
+
 # %% [markdown]
 # ## Independent var models
 #
@@ -195,7 +209,7 @@ SeedType = Union[None,int,Tuple[int]]
 
 # %%
 @dataclass(frozen=True)
-class StatXModel(ABC):
+class StatXModel(Model):
     """
     Base class for an independent model wrapping a distribution from
     `scipy.stats`.
@@ -211,7 +225,7 @@ class StatXModel(ABC):
 
     @abstractmethod
     def get_rv(self, seed: SeedType=None) -> stats._distn_infrastructure.rv_generic:
-        raise NotImplementedError
+        raise NotImplementedError 
     
     def get_rng(self, seed: SeedType=None) -> Generator:
         # Combine self.seed and seed
@@ -228,7 +242,8 @@ class StatXModel(ABC):
         while True:
             yield rv.rvs()
     def __call__(self, L, seed=None):
-        if seed is None and self.seed is None:
+        seed = seed or self.seed
+        if seed is None:
             raise RuntimeError("`seed` was not specified: cannot draw random samples.")
         # Call L times
         return self.get_rv(seed=seed).rvs(size=L)
@@ -260,7 +275,7 @@ class UniformX(StatXModel):
 # %% [markdown]
 # ### Sequentially generated $X$
 #
-# Parameters: $x_0$, $Δx$
+# Parameters: $x_0$, $Δ x$
 # $$\begin{aligned}
 # x_i &= x_{i-1} + Δx \,,& i \geq 1
 # \end{aligned}$$
@@ -272,7 +287,7 @@ class UniformX(StatXModel):
 
 # %%
 @dataclass(frozen=True)
-class SequentialX:
+class SequentialX(Model):
     x0: float=0.
     Δx: float=1.
     def __iter__(self):
@@ -302,7 +317,7 @@ class SequentialX:
 
 # %%
 @dataclass(frozen=True)
-class LinspaceX:
+class LinspaceX(Model):
     low: float=0.
     high: float=1.
     def __iter__(self):
@@ -336,7 +351,7 @@ class LinspaceX:
 
 # %%
 @dataclass(frozen=True)
-class DeterministicExpon:
+class DeterministicExpon(Model):
     λ: float=1.
     seed: None=None  # Only for consistency with probabilistic models
     def __call__(self, x):
@@ -368,7 +383,7 @@ class DeterministicExpon:
 #
 # All distributions are constructed using a variation on the method of moments, using the *second* and higher moments: we invert the closed form expressions for those moments in terms of parameters. We then match the *first* moment by *translation*. For a distribution with unbounded support, this is usually the same as inverting the closed-form expression for the mean, but for distributions with bounded support this results in moving the support, typically so that it contains some negative numbers.
 
-# %% [markdown]
+# %% [markdown] user_expressions=[]
 # ### Generative vs inference noise models
 #
 # For inference,  we restrict ourselves to distributions that have support over $(-\infty, \infty)$. Otherwise, if even a single data point falls outside the support (which is often occurs when the model does not match the data perfectly), the likelihood diverges to $-\infty$, preventing any comparison of models.
@@ -384,7 +399,7 @@ class DeterministicExpon:
 
 # %%
 @dataclass(frozen=True)
-class AdditiveRVError:
+class AdditiveRVError(Model):
     """
     Base class for experimental models consisting of adding noise from a
     scipy.stats random variable. If this random is denoted RV, then the
@@ -411,6 +426,19 @@ class AdditiveRVError:
         return z + self.get_rv(seed).rvs(size=z.shape)
     def logpdf(self, y, z):
         return self.get_rv().logpdf(y - z)
+    
+    # @property
+    # def random_state(self):
+    #     return self.seed
+    # @random_state.setter
+    # def random_state(self, value):
+    #     if isinstance(value, int):
+    #         self.seed = value
+    #     elif (isinstance(value, Sequence)
+    #           and all(isinstance(i, int) for i in value)):
+    #         self.seed = tuple(value)
+    #     else:
+    #         raise TypeError("`random_state` accepts only integers or tuples of integers.")
 
 
 # %% [markdown]
@@ -824,14 +852,14 @@ class NormInvGaussError(AdditiveRVError):
 # %% [markdown]
 # These equations are easily solved for $|x|$. Matching the sign of the asymmetry parameter ($b$) to the skewness ($γ$), we get all the function parameters:
 #
-# \begin{alignat}{2}
+# $$\begin{alignat}{2}
 # x &= \frac{b}{a} &&= \pm \frac{γ}{\sqrt{3κ - 4γ^2}} \\
 # c &= \sqrt{a^2- b^2} &&= \frac{9x^2}{γ^2} \\
 # a &= \frac{c}{\sqrt{1-x^2}} \\
 # b &= \sgn(γ) \, \frac{a}{|x|} \\
 # ω &= \frac{σc^{3/2}}{a} \\
 # ξ &= - \frac{ωb}{c}
-# \end{alignat}
+# \end{alignat}$$
 #
 # From the first equation and the requirement that $|x| < 1$ we get the constraint that $κ > \frac{5}{3} γ^2$ . The equality $κ = \frac{5}{3} γ^2$ corresponds to $a = b$, which has infinite moments.
 #
@@ -851,8 +879,8 @@ class NormInvGaussError(AdditiveRVError):
 # **Special case: $γ = κ = 0$**  
 # This is the Gaussian distribution with standard deviation $σ$.
 
-# %% [markdown]
-# ---
+# %% [markdown] user_expressions=[]
+# ___
 #
 # :::{caution}
 # The distributions below have bounded support. [As noted above](#generative-vs-inference-noise-models), they should not be use for inference, but can be used to generate synthetic data.
@@ -889,7 +917,7 @@ class ExponentialError(AdditiveRVError):
 # for σ in [0.1, 1, 4, 8.3]:
 #     assert ExponentialError(σ=σ).get_rv().stats("mvsk") == (0, σ**2, 2, 6)
 
-# %% [markdown]
+# %% [markdown] user_expressions=[]
 # ### Poisson error
 #
 # Denoted $\Poisson$.
