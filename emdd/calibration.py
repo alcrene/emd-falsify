@@ -7,7 +7,7 @@
 #       extension: .py
 #       format_name: percent
 #       format_version: '1.3'
-#       jupytext_version: 1.14.1
+#       jupytext_version: 1.14.4
 #   kernelspec:
 #     display_name: Python (EMD-paper)
 #     language: python
@@ -68,7 +68,8 @@ except ModuleNotFoundError:
 # from numpy.random import default_rng
 # from scipy import stats
 # import pandas as pd
-# from emdd.utils import ParamColl, expand
+# from smttask.workflows import ParamColl
+# from emdd.utils import expand
 # logging.basicConfig(level=logging.WARNING)
 # logger.setLevel(logging.ERROR)
 
