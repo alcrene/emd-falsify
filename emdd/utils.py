@@ -23,7 +23,7 @@ from scityping.numpy import NPValue, Array
 
 import myst_nb
 
-from .find_sane_dt import make_int_superscript
+from .digitize import make_int_superscript
 
 logger = logging.getLogger(__name__)
 

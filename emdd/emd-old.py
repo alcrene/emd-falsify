@@ -54,11 +54,11 @@ logger = logging.getLogger("emdd.emd")
 # %% tags=["active-ipynb", "remove-input"]
 # from emdd import models, config
 # from emdd.utils import glue, SeedGenerator, get_bounds
-# from emdd.find_sane_dt import find_sane_dt
+# from emdd.digitize import digitize
 # from dataclasses import replace
 
 # %% tags=["active-py"]
-from .find_sane_dt import find_sane_dt
+from .digitize import digitize
 
 
 # %% tags=["active-ipynb", "hide-input"]
@@ -170,7 +170,7 @@ def fit_Φeaz(MX, MN, Me, l,
     #    Φarr = np.linspace(0.001,0.999, 1000)
     # except that dt is guaranteed to have an exact base-2 representation,
     # and therefore may lead to fewer rounding errors.
-    dt = find_sane_dt(0.001, show=False)
+    dt = digitize(0.001, show=False)
     Φarr = np.arange(1, 1000)*dt
     # Estimate synthetic Φe from empirical CDF by fitting a metalogistic.
     le_arr = []
@@ -269,7 +269,7 @@ def fit_Φeaz(MX, MN, Me, l,
 #     #    Φarr = np.linspace(0.01,0.99, 1000)
 #     # except that dt is guaranteed to have an exact base-2 representation,
 #     # and therefore may lead to fewer rounding errors.
-#     dt = find_sane_dt(0.01, show=False)
+#     dt = digitize(0.01, show=False)
 #     _Φarr = np.arange(1, 100)*dt
 #
 #     Φarr[key] = _Φarr

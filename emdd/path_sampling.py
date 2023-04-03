@@ -45,6 +45,8 @@ from typing import Optional, Union, Literal, Tuple, Generator
 from scityping import Real
 from scityping.numpy import Array, Generator as RNGenerator
 
+from emdd.digitize import digitize  # Used to improve numerical stability when finding Beta parameters
+
 # %% [markdown] tags=["remove-cell"]
 # Notebook-only imports
 
