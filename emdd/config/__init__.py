@@ -8,13 +8,13 @@ from pydantic import BaseModel, Field, validator, root_validator
 from mackelab_toolbox.config import ValidatingConfig, prepend_rootdir, ensure_dir_exists
 from mackelab_toolbox.config.holoviews import FiguresConfig
     # prepend_rootdir is a workaround because assigning automatically doesn’t currently work
+from scityping import Config as ScitypingConfig
 
 # Possible improvement: If we could have nested config parsers, we might be 
 #     able to rely more on the ConfigParser machinery, and less on a custom
 #     Pydantic type, which should be easier for others to follow.
 #     In particular, the `colors` field could remain a config parser, although
 #     we would still want to allow dotted access.
-
 
 class Config(ValidatingConfig):
     default_config_file : ClassVar = Path(__file__).parent/"defaults.cfg"
@@ -43,6 +43,9 @@ class Config(ValidatingConfig):
     class random:
         entropy: int
 
+    class mp:
+        max_cores: int
+
     class caching:
         """
         Note that the `joblib` options are ignored when `use_disk_cache` is False.
@@ -67,6 +70,11 @@ class Config(ValidatingConfig):
 
             _prepend_rootdir = validator("location", allow_reuse=True)(prepend_rootdir)
 
+            # We could comment this out, since although pickled data are not machine portable, since the hash/filename is computed
+            # from the pickle, if another machine tries to load to load from the same location, it should be OK.
+            # However this potentially mixes 1000’s of files from different machines
+            # in the same directory, making it almost impossible to later remove outputs from a specific machine.
+            # (E.g. remove the laptop runs but keep the ones from the server)
             @validator("location")
             def make_location_unique(cls, location):
                 """
@@ -85,48 +93,15 @@ class Config(ValidatingConfig):
                 return location/hostdir
 
     figures: FiguresConfig
-    # class figures:
-    #     # class Config:
-    #     #     extra = "allow"
-    #     #     arbitrary_types_allowed = True  # B/c ConfigParser is not defined as a Pydantic type
-    #     backend: Literal["matplotlib", "bokeh"]
-    #     matplotlib: Optional[HoloConfig["matplotlib"]] = None
-    #     bokeh: Optional[HoloConfig["bokeh"]]           = None
 
-    #     @root_validator
-    #     def load_backends(cls, values):
-    #         """By preemptively loading the backends, we ensure that e.g.
-    #         ``hv.opts(*config.figures.bokeh)`` does not raise an exception.
-    #         """
-    #         if "matplotlib" in values:
-    #             renderer = hv.renderer("matplotlib")
-    #             render_args = values["matplotlib"].renderer
-    #             if render_args:
-    #                 for kw, val in render_args.items():
-    #                     setattr(renderer, kw, val)
-
-    #         if "bokeh" in values:
-    #             renderer = hv.renderer("bokeh")
-    #             render_args = values["bokeh"].renderer
-    #             if render_args:
-    #                 for kw, val in render_args.items():
-    #                     setattr(renderer, kw, val)
-
-    #         return values
-
-    #     @root_validator
-    #     def set_defaults(cls, values):
-    #         for backend in ["matplotlib", "bokeh"]:
-    #             if backend in values and backend in hv.Store.renderers:  # If backend is not in `renderers`, than the best guess is that `load_backends` failed for that backend
-    #                 hv.Store.set_current_backend(backend)  # Only to silence warnings
-    #                 hv.opts.defaults(values[backend].all_opts)
-    #         hv.Store.set_current_backend(values.get("backend"))
-    #         return values
-
-    #     def __getattr__(self, attr):
-    #         "Use the config associated to `backend` as default."
-    #         return getattr(getattr(self, self.backend), attr)
+    scityping: ScitypingConfig={}
+    
+    @validator('scityping')
+    def add_emdd_safe_packages(scityping):
+        scityping.safe_packages.add("emdd.models")
 
 
 # config = Config(Path(__file__).parent/"defaults.cfg",
 #                 config_module_name=__name__)
+
+config = Config()

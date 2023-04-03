@@ -11,7 +11,8 @@ Things to ensure are always done:
 
 # from pathlib import Path
 # import logging
-from .config import Config
+from .config import Config, config
+
 # import smttask
 # from smttask.view import RecordStoreView
 
