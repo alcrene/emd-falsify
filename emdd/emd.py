@@ -49,19 +49,10 @@ from scityping.numpy import Array
 
 from emdd import Config
 from emdd.path_sampling import generate_quantile_paths
+from emdd.utils import hv  # Holoviews is imported with a guard in case it is not installed
 
 config = Config()
 logger = logging.getLogger(__name__)
-
-# + tags=["remove-cell"]
-try:
-    import holoviews as hv
-except ModuleNotFoundError:
-    # One could want to use this package without Holoviews: it is only required by the function `calibration_plot`
-    class HoloviewsNotFound:
-        def __getattr__(self, attr):
-            raise ModuleNotFoundError("Unable to import Holoviews; perhaps it is not installed ?")
-    hv = HoloviewsNotFound()
 
 # + [markdown] tags=["remove-cell"]
 # Notebook only imports

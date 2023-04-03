@@ -13,6 +13,12 @@ Things to ensure are always done:
 # import logging
 from .config import Config, config
 
+def __getattr__(attr):
+    if attr == "Bemd":
+        from .emd import Bemd
+        return Bemd
+    else:
+        raise AttributeError(f"Module `emdd` does not define '{attr}'.")
 # import smttask
 # from smttask.view import RecordStoreView
 
