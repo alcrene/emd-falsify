@@ -19,12 +19,13 @@
 # # Sampling quantile paths
 #
 # $
-# \renewcommand{\lnLt}{\tilde{l}}
+# \renewcommand{\lnLtt}{\tilde{l}}
 # \renewcommand{\lnLh}[1][]{\hat{l}_{#1}}
-# \renewcommand{\emdstd}[1][]{\tilde{σ}_{{#1}}}
 # \renewcommand{\EE}{\mathbb{E}}
 # \renewcommand{\VV}{\mathbb{V}}
 # \renewcommand{\nN}{\mathcal N}
+# \renewcommand{\emdstd}[1][]{\tilde{σ}_{{#1}}}
+# \renewcommand{\emdstd}[1][]{{\mathrm{EMD}}_{#1}}
 # \renewcommand{\Mvar}{\mathop{\mathrm{Mvar}}}
 # \renewcommand{\EMD}[1][]{{\mathrm{EMD}}_{#1}}
 # \renewcommand{\Beta}{\mathop{\mathrm{Beta}}}
@@ -67,13 +68,13 @@ logger = logging.getLogger(__name__)
 
 
 # %% [markdown]
-# We want to generate paths $\lnLh$ for the quantile function $l(Φ)$, with $Φ \in [0, 1]$, from a stochastic process $\pathP$ determined by $\lnLt(Φ)$ and $\emdstd(Φ)$. This process must satisfy the following requirements:
+# We want to generate paths $\lnLh$ for the quantile function $l(Φ)$, with $Φ \in [0, 1]$, from a stochastic process $\pathP$ determined by $\lnLtt(Φ)$ and $\emdstd(Φ)$. This process must satisfy the following requirements:
 # - It must generate only monotone paths, since quantile functions are monotone.
 # - The process must be heteroscedastic, with variability at $Φ$ given by $\emdstd(Φ)$.
-# - Generated paths should track the function $\lnLt(Φ)$, and track it more tightly when variability is low.
+# - Generated paths should track the function $\lnLtt(Φ)$, and track it more tightly when variability is low.
 # - Paths should be “temporally uncorrelated”: each stop $Φ$ corresponds to a different ensemble of data points, which can be drawn in any order. So we don't expect any special correlation between $\lnLh(Φ)$ and $\lnLh(Φ')$, beyond the requirement of monotonicity.
 #   + In particular, we want to avoid defining a stochastic process which starts at one point and accumulates variance, like the $\sqrt{t}$ envelope characteristic of a Gaussian white noise.
-#   + Concretely, we require the process to be “$Φ$-symmetric”: replacing $\lnLt(Φ) \to \lnLt(-Φ)$ and $\emdstd(Φ) \to \emdstd(-Φ)$ should define the same process, just inverted along the $Φ$ axis.
+#   + Concretely, we require the process to be “$Φ$-symmetric”: replacing $\lnLtt(Φ) \to \lnLtt(-Φ)$ and $\emdstd(Φ) \to \emdstd(-Φ)$ should define the same process, just inverted along the $Φ$ axis.
 
 # %% [markdown]
 # ## Hierarchical beta process
@@ -81,14 +82,14 @@ logger = logging.getLogger(__name__)
 # %% [markdown]
 # Because the joint requirements of monotonicity, non-stationarity and $Φ$-symmetry are uncommon for a stochastic process, some care is required to define an appropriate $\pathP$. The approach we choose here is to first select the end points $\lnLh(0)$ and $\lnLh(1)$, then fill the interval by successive binary partitions: first $\bigl\{\lnLh\bigl(\tfrac{1}{2}\bigl)\bigr\}$, then $\bigl\{\lnLh\bigl(\tfrac{1}{4}\bigr), \lnLh\bigl(\tfrac{3}{4}\bigr)\bigr\}$, $\bigl\{\lnLh\bigl(\tfrac{1}{8}\bigr), \lnLh\bigl(\tfrac{3}{8}\bigr), \lnLh\bigl(\tfrac{5}{8}\bigr), \lnLh\bigl(\tfrac{7}{8}\bigr)\bigr\}$, etc. (Below we will denote these ensembles $\{\lnLh\}^{(1)}$, $\{\lnLh\}^{(2)}$, $\{\lnLh\}^{(3)}$, etc.) Thus integrating over paths becomes akin to a path integral with variable end points.
 # Moreover, instead of drawing quantile values, we draw increments
-# $$Δl_{ΔΦ}(Φ) := \lnLh(Φ+ΔΦ) - \lnLh(Φ) \,.$$ (eq_def-quantile-increment)
-# Given two initial end points $\lnLh(0)$ and $\lnLh(1)$, we therefore first we draw the pair $\bigl\{Δl_{2^{-1}}(0),\; Δl_{2^{-1}}\bigl(2^{-1}\bigr)\}$, which gives us
-# $$\lnLh\bigl(2^{-1}\bigr) = \lnLh(0) + Δl_{2^{-1}}(0) = \lnLh(1) - Δl_{2^{-1}}\bigl(2^{-1}\bigr)\,.$$
-# Then $\bigl\{\lnLh(0), \lnLh\bigl(\frac{1}{2}\bigr) \bigr\}$ and $\bigl\{ \lnLh\bigl(\frac{1}{2}\bigr), \lnLh(1) \bigr\}$ serve as end points to draw $\bigl\{Δl_{2^{-2}}\bigl(0\bigr),\; Δl_{2^{-2}}\bigl(2^{-2}\bigr) \bigr\}$ and $\bigl\{Δl_{2^{-2}}\bigl(2^{-1}\bigr),\; Δl_{2^{-2}}\bigl(2^{-1} + 2^{-2}\bigr) \bigr\}$. We repeat the procedure as needed, sampling smaller and smaller incremenents, until the path has the desired resolution. As the increments are constrained:
-# $$Δl_{2^{-n}}(Φ) \in \bigl( 0, \lnLh(Φ+2^{-n+1}) - \lnLh(Φ)\,\bigr)\,, $$
+# $$Δ l_{ΔΦ}(Φ) := \lnLh(Φ+ΔΦ) - \lnLh(Φ) \,.$$ (eq_def-quantile-increment)
+# Given two initial end points $\lnLh(0)$ and $\lnLh(1)$, we therefore first we draw the pair $\bigl\{Δ l_{2^{-1}}(0),\; Δ l_{2^{-1}}\bigl(2^{-1}\bigr)\}$, which gives us
+# $$\lnLh\bigl(2^{-1}\bigr) = \lnLh(0) + Δ l_{2^{-1}}(0) = \lnLh(1) - Δ l_{2^{-1}}\bigl(2^{-1}\bigr)\,.$$
+# Then $\bigl\{\lnLh(0), \lnLh\bigl(\frac{1}{2}\bigr) \bigr\}$ and $\bigl\{ \lnLh\bigl(\frac{1}{2}\bigr), \lnLh(1) \bigr\}$ serve as end points to draw $\bigl\{Δ l_{2^{-2}}\bigl(0\bigr),\; Δ l_{2^{-2}}\bigl(2^{-2}\bigr) \bigr\}$ and $\bigl\{Δ l_{2^{-2}}\bigl(2^{-1}\bigr),\; Δ l_{2^{-2}}\bigl(2^{-1} + 2^{-2}\bigr) \bigr\}$. We repeat the procedure as needed, sampling smaller and smaller incremenents, until the path has the desired resolution. As the increments are constrained:
+# $$Δ l_{2^{-n}}(Φ) \in \bigl( 0, \lnLh(Φ+2^{-n+1}) - \lnLh(Φ)\,\bigr)\,, $$
 # the path thus sampled is always monotone. Note also that increments must be drawn in pairs (or more generally as a *combination*) of values constrained by their sum:
-# $$Δl_{2^{-n}}\bigl(Φ\bigr) + Δl_{2^{-n}}\bigl(Φ + 2^{-n} \bigr) \stackrel{!}{=} \lnLh(Φ+2^{-n+1}) - \lnLh(Φ) \,.$$ (eq_sum-constraint)
-# The possible increments therefore lie on a 1-simplex, for which a natural choice is to use a beta distribution[^1], with the random variable corresponding to the first increment $Δl_{2^{-n}}(Φ)$. The density function of a beta random variable has the form
+# $$Δ l_{2^{-n}}\bigl(Φ\bigr) + Δ l_{2^{-n}}\bigl(Φ + 2^{-n} \bigr) \stackrel{!}{=} \lnLh(Φ+2^{-n+1}) - \lnLh(Φ) \,.$$ (eq_sum-constraint)
+# The possible increments therefore lie on a 1-simplex, for which a natural choice is to use a beta distribution[^1], with the random variable corresponding to the first increment $Δ l_{2^{-n}}(Φ)$. The density function of a beta random variable has the form
 # $$p(x_1) \propto x^{α-1} (1-x)^{β-1}\,,$$ (eq_beta-pdf)
 # with $α$ and $β$ parameters to be determined.
 
@@ -109,49 +110,49 @@ logger = logging.getLogger(__name__)
 # %% [markdown]
 # ### Conditions for choosing the beta parameters
 #
-# To draw an increment $Δl_{2^{-n}}$, we need to convert $\lnLt(Φ)$ and $\emdstd(Φ)$ (obtained from the model discrepancy analysis) into beta distribution parameters $α$ and $β$. If $x_1$ follows a beta distribution, then its first two cumulants are given by
+# To draw an increment $Δ l_{2^{-n}}$, we need to convert $\lnLtt(Φ)$ and $\emdstd(Φ)$ (obtained from the model discrepancy analysis) into beta distribution parameters $α$ and $β$. If $x_1$ follows a beta distribution, then its first two cumulants are given by
 # $$\begin{aligned}
 # x_1 &\sim \Beta(α, β) \,, \\
 # \EE[x_1] &= \frac{α}{α+β} \,, \\
 # \VV[x_1] &= \frac{αβ}{(α+β)^2(α+β+1)} \,. \\
 # \end{aligned}$$
 # However, as discussed by Mateu-Figueras et al. (2021, 2011), to properly account for the geometry of a simplex, one should consider instead statistics of with respect to the Aitchison measure, sometimes referred to as the *center* and *metric variance*. Defining $x_2 = 1-x_1$, these can be written (Mateu-Figueras et al., 2021)
-# $$\begin{aligned}
+# $$\begin{align}
 # \EE_a[(x_1, x_2)] &= \frac{1}{e^{ψ(α)} + e^{ψ(β)}} \bigl[e^{ψ(α)}, e^{ψ(β)}\bigr] \,, \label{eq_Aitchison-moments__EE} \\
 # \Mvar[(x_1, x_2)] &= \frac{1}{2} \bigl(ψ_1(α) + ψ_1(β)\bigr) \,. \label{eq_Aitchison-moments__Mvar}
-# \end{aligned}$$ (eq_Aitchison-moments)
+# \end{align}$$ (eq_Aitchison-moments)
 # Here $ψ$ and $ψ_1$ are the digamma and trigamma functions respectively.
 # (In addition to ontological considerations, it is much more straightforward to define a consistent stochastic process using the center and metric variance. For example, since the metric variance is unbounded, we can easily scale it with $\emdstd(Φ)$.)
 
 # %% [markdown]
 # Since we want the sum to be $d := \lnLh(Φ+2^{-n+1}) - \lnLh(Φ)$, we define
-# $$\bigl[Δl_{2^{-n}}\bigl(Φ\bigr),\, Δl_{2^{-n}}\bigl(Φ+2^{-n})\bigr)\bigr] = d \cdot \bigl[x_1, x_2\bigr] \,.$$  (eq_relation-beta-increment)
+# $$\bigl[Δ l_{2^{-n}}\bigl(Φ\bigr),\, Δ l_{2^{-n}}\bigl(Φ+2^{-n})\bigr)\bigr] = d \cdot \bigl[x_1, x_2\bigr] \,.$$  (eq_relation-beta-increment)
 # Then
 
 # %% [markdown]
 # $$\begin{aligned}
-# \EE_a\Bigl[\bigl[Δl_{2^{-n}}\bigl(Φ\bigr),\, Δl_{2^{-n}}\bigl(Φ+2^{-n}\bigr)\bigr]\Bigr] &= \frac{d}{e^{ψ(α)} + e^{ψ(β)}} \bigl[e^{ψ(α)}, e^{ψ(β)}\bigr] \,, \\
-# \Mvar\Bigl[\bigl[Δl_{2^{-n}}\bigl(Φ\bigr),\, Δl_{2^{-n}}\bigl(Φ+2^{-n}\bigr)\bigr]\Bigr] &= \frac{1}{2} \bigl(ψ_1(α) + ψ_1(β)\bigr) \,.
+# \EE_a\Bigl[\bigl[Δ l_{2^{-n}}\bigl(Φ\bigr),\, Δ l_{2^{-n}}\bigl(Φ+2^{-n}\bigr)\bigr]\Bigr] &= \frac{d}{e^{ψ(α)} + e^{ψ(β)}} \bigl[e^{ψ(α)}, e^{ψ(β)}\bigr] \,, \\
+# \Mvar\Bigl[\bigl[Δ l_{2^{-n}}\bigl(Φ\bigr),\, Δ l_{2^{-n}}\bigl(Φ+2^{-n}\bigr)\bigr]\Bigr] &= \frac{1}{2} \bigl(ψ_1(α) + ψ_1(β)\bigr) \,.
 # \end{aligned}$$
 
 # %% [markdown]
 # We now choose to define the parameters $α$ and $β$ via the following relations:
 # $$\begin{aligned}
-# \EE_a\Bigl[\bigl[Δl_{2^{-n}}\bigl(Φ\bigr),\, Δl_{2^{-n}}\bigl(Φ+2^{-n}\bigr)\bigr]\Bigr] &=^* \bigl[\, \lnLt\bigl(Φ+2^{-n}\bigr) - \lnLt\bigl(Φ\bigr),\,\lnLt\bigl(Φ+2^{-n+1}\bigr) - \lnLt\bigl(Φ+2^{-n}\bigr) \,\bigr]\,, \\
-# \Mvar\Bigl[\bigl[Δl_{2^{-n}}\bigl(Φ\bigr),\, Δl_{2^{-n}}\bigl(Φ+2^{-n}\bigr)\bigr]\Bigr] &\stackrel{!}{=} \emdstd\bigl(Φ+2^{-n}\bigr)^2 \,.
+# \EE_a\Bigl[\bigl[Δ l_{2^{-n}}\bigl(Φ\bigr),\, Δ l_{2^{-n}}\bigl(Φ+2^{-n}\bigr)\bigr]\Bigr] &=^* \bigl[\, \lnLtt\bigl(Φ+2^{-n}\bigr) - \lnLtt\bigl(Φ\bigr),\,\lnLtt\bigl(Φ+2^{-n+1}\bigr) - \lnLtt\bigl(Φ+2^{-n}\bigr) \,\bigr]\,, \\
+# \Mvar\Bigl[\bigl[Δ l_{2^{-n}}\bigl(Φ\bigr),\, Δ l_{2^{-n}}\bigl(Φ+2^{-n}\bigr)\bigr]\Bigr] &\stackrel{!}{=} \emdstd\bigl(Φ+2^{-n}\bigr)^2 \,.
 # \end{aligned}$$ (eq_defining-conditions-a)
 
 # %% [markdown]
-# These follow from interpretating $\lnLt$ and $\emdstd$ as estimators for the mean and square root of the metric variance.
+# These follow from interpretating $\lnLtt$ and $\emdstd$ as estimators for the mean and square root of the metric variance.
 # We use $=^*$ to indicate equality in spirit rather than true equality, since strictly speaking, these are 3 equations for 2 unknown. To reduce the $\EE_a$ equations to one, we use instead
-# $$\frac{\EE_a\bigl[Δl_{2^{-n}}\bigl(Φ\bigr)\bigr]}{\EE_a \bigl[Δl_{2^{-n}}\bigl(Φ+2^{-n}\bigr)\bigr]} \stackrel{!}{=} \frac{\lnLt\bigl(Φ+2^{-n}\bigr) - \lnLt\bigl(Φ\bigr)}{\lnLt\bigl(Φ+2^{-n+1}\bigr) - \lnLt\bigl(Φ+2^{-n}\bigr)} \,.$$ (eq_defining_conditions-b)
+# $$\frac{\EE_a\bigl[Δ l_{2^{-n}}\bigl(Φ\bigr)\bigr]}{\EE_a \bigl[Δ l_{2^{-n}}\bigl(Φ+2^{-n}\bigr)\bigr]} \stackrel{!}{=} \frac{\lnLtt\bigl(Φ+2^{-n}\bigr) - \lnLtt\bigl(Φ\bigr)}{\lnLtt\bigl(Φ+2^{-n+1}\bigr) - \lnLtt\bigl(Φ+2^{-n}\bigr)} \,.$$ (eq_defining_conditions-b)
 
 # %% [markdown] tags=["remove-cell"]
 # ---
 #
 # TO REMOVE: I originally put a $2^{-n}$ coefficient in front of $\Mvar$. I don't think it's warranted anymore, since we already scale with $d$.
 #
-# In the second, the scaling proportional to the step size ensures that as increments get smaller, the variance also decreases. More specifically, that $\Mvar\Bigl[\bigl[Δl_{2^{-n+1}}\bigl(Φ\bigr),\, Δl_{2^{-n+1}}\bigl(Φ+2^{-n+1})\bigr)\bigr]\Bigr] \approx 2\,\Mvar\Bigl[\bigl[Δl_{2^{-n}}\bigl(Φ\bigr),\, Δl_{2^{-n}}\bigl(Φ+2^{-n})\bigr)\bigr]\Bigr]$.
+# In the second, the scaling proportional to the step size ensures that as increments get smaller, the variance also decreases. More specifically, that $\Mvar\Bigl[\bigl[Δ l_{2^{-n+1}}\bigl(Φ\bigr),\, Δ l_{2^{-n+1}}\bigl(Φ+2^{-n+1})\bigr)\bigr]\Bigr] \approx 2\,\Mvar\Bigl[\bigl[Δ l_{2^{-n}}\bigl(Φ\bigr),\, Δ l_{2^{-n}}\bigl(Φ+2^{-n})\bigr)\bigr]\Bigr]$.
 #
 # ---
 
@@ -160,10 +161,10 @@ logger = logging.getLogger(__name__)
 # - We satisfy the necessary condition for consistency by construction:
 #   $$p\bigl(\{l\}^{(n)}\bigr)\bigr) = \int p\bigl(\{l\}^{(n)} \,\big|\, \{l\}^{(n+1)}\bigr) \,d\{l\}^{(n+1)}\,.$$
 # - The stochastic process is not Markovian, so successive increments are not independent. The variance of a larger increment therefore need not equal the sum of the variance of constituent smaller ones; in other words,
-#   $$Δl_{2^{-n+1}}\bigl(Φ\bigr) = Δl_{2^{-n}}\bigl(Φ\bigr) + Δl_{2^{-n}}\bigl(Φ+2^{-n}\bigr)$$
+#   $$Δ l_{2^{-n+1}}\bigl(Φ\bigr) = Δ l_{2^{-n}}\bigl(Φ\bigr) + Δ l_{2^{-n}}\bigl(Φ+2^{-n}\bigr)$$
 #   does *not* imply
-#   $$\VV\bigl[Δl_{2^{-n+1}}\bigl(Φ\bigr)\bigr] = \VV\bigl[Δl_{2^{-n}}\bigl(Φ\bigr)\bigr] + \VV\bigl[Δl_{2^{-n}}\bigl(Φ+2^{-n}\bigr)\bigr]\,.$$
-# - Our defining equations make equivalent use of the pre ($Δl_{2^{-n}}(Φ)$) and post ($Δl_{2^{-n}}(Φ+2^{-n})$) increments, thus preserving symmetry in $Φ$.
+#   $$\VV\bigl[Δ l_{2^{-n+1}}\bigl(Φ\bigr)\bigr] = \VV\bigl[Δ l_{2^{-n}}\bigl(Φ\bigr)\bigr] + \VV\bigl[Δ l_{2^{-n}}\bigl(Φ+2^{-n}\bigr)\bigr]\,.$$
+# - Our defining equations make equivalent use of the pre ($Δ l_{2^{-n}}(Φ)$) and post ($Δ l_{2^{-n}}(Φ+2^{-n})$) increments, thus preserving symmetry in $Φ$.
 # - Step sizes of the form $2^{-n}$ have exact representations in binary. Thus even small step sizes should not introduce additional numerical errors.
 
 # %% [markdown]
@@ -171,16 +172,16 @@ logger = logging.getLogger(__name__)
 
 # %% [markdown]
 # Define
-# $$\begin{aligned}
-# r &:= \frac{\lnLt(Φ+2^{-n}) - \lnLt(Φ)}{\lnLt(Φ+2^{-n+1}) - \lnLt(Φ+2^{-n})} \,; \\
+# $$\begin{align}
+# r &:= \frac{\lnLtt(Φ+2^{-n}) - \lnLtt(Φ)}{\lnLtt(Φ+2^{-n+1}) - \lnLtt(Φ+2^{-n})} \,; \\
 # v &:= \frac{1}{2} \emdstd\bigl(Φ + 2^{-n}\bigr)^2 \,.
-# \end{aligned}$$
-# (Definitions repeated from Eqs. \eqref{eq_def-r-v__r,eq_def-r-v__v}.) The first value, $r$, is the ratio of two subincrements within $Δl_{2^{-n+1}}(Φ)$.
+# \end{align}$$ (eq_def-r-v_supp) 
+# (Definitions repeated from Eqs. \eqref{eq_def-r-v__r,eq_def-r-v__v}.) The first value, $r$, is the ratio of two subincrements within $Δ l_{2^{-n+1}}(Φ)$.
 # Setting $\frac{e^{ψ(α)}}{e^{ψ(β)}} = r$, the two equations we need to solve for $α$ and $β$ can be written
-# $$\begin{aligned}
+# $$\begin{align}
 # ψ(α) - ψ(β) &= \ln r \,; \\
 # ψ_1(α) + ψ_1(β) &= v \,.
-# \end{aligned}$$
+# \end{align}$$ (eq_root-finding-problem_supp)
 # (Definitions repeated from Eqs. \eqref{eq_root-finding-problem__r,eq_root-finding-problem__v}.) Note that these equations are symmetric in $Φ$: replacing $Φ$ by $-Φ$ simply changes the sign on both sides of the first.
 
 # %% [markdown] tags=["remove-cell"]
@@ -306,11 +307,11 @@ def f_mid(lnα, v, _exp=np.exp, polygamma=polygamma):
 # $\boldsymbol{r = 0}$
 # ^^^
 #
-# The corresponds to stating that $Δl_{2^{-n}}(Φ)$ is infinitely smaller than $Δl_{2^{-n}}(Φ+2^{-n})$. Thus we set $x_1 = 1$, which is equivalent to setting
+# The corresponds to stating that $Δ l_{2^{-n}}(Φ)$ is infinitely smaller than $Δ l_{2^{-n}}(Φ+2^{-n})$. Thus we set $x_1 = 1$, which is equivalent to setting
 #
 # $$\begin{aligned}
-# Δl_{2^{-n}}(Φ) &= 0 \,, \\
-# Δl_{2^{-n}}(Φ+2^{-n}) &= \lnLt(Φ+2^{-n+1}) - \lnLt(Φ) \,.
+# Δ l_{2^{-n}}(Φ) &= 0 \,, \\
+# Δ l_{2^{-n}}(Φ+2^{-n}) &= \lnLtt(Φ+2^{-n+1}) - \lnLtt(Φ) \,.
 # \end{aligned}$$
 #
 # :::
@@ -320,7 +321,7 @@ def f_mid(lnα, v, _exp=np.exp, polygamma=polygamma):
 # $\boldsymbol{r = 0}$
 # ^^^
 #
-# The converse of the previous case: $Δl_{2^{-n}}(Φ)$ is infinitely larger than $Δl_{2^{-n}}(Φ+2^{-n})$. We set $x_1 = 0$.
+# The converse of the previous case: $Δ l_{2^{-n}}(Φ)$ is infinitely larger than $Δ l_{2^{-n}}(Φ+2^{-n})$. We set $x_1 = 0$.
 #
 # :::
 #
@@ -349,7 +350,7 @@ def f_mid(lnα, v, _exp=np.exp, polygamma=polygamma):
 # \end{aligned}$$
 # (For this special case, we revert to writing the condition in terms of a standard (Lebesgue) expectation, since the center (Eq. \eqref{eq_Aitchison-moments__EE}) is undefined when $α, β \to 0$.)
 #
-# Since we have already considered with the special cases $r = 0$ and $r \to \infty$, we can assume $0 < r < \infty$. Then both $α$ and $β$ are zero, and $x_1$ should be a Bernoulli random variable with success probability $p = w_2 = \frac{1}{r+1}$.
+# Since we have already considered the special cases $r = 0$ and $r \to \infty$, we can assume $0 < r < \infty$. Then both $α$ and $β$ are zero, and $x_1$ should be a Bernoulli random variable with success probability $p = w_2 = \frac{1}{r+1}$.
 #
 # :::
 #
@@ -374,6 +375,15 @@ def f_mid(lnα, v, _exp=np.exp, polygamma=polygamma):
 #     elif v > 1e4:
 #         # (Actual draw function replaces beta by a Bernoulli in this case)
 #         return scipy.stats.bernoulli(1/(r+1))
+#     
+#     if v < 1e-6:
+#         # Some unlucky values, like r=2.2715995006941436, v=6.278153793994013e-08,
+#         # seem to be particularly pathological for the root solver.
+#         # At least in the case above, the function is continuous at those values
+#         # (±ε returns very similar values for a and b).
+#         # Replacing these by nearby values which are more friendly to binary representation
+#         # seems to help.
+#         v = digitize(v, rtol=1e-5, show=False)
 #     
 #     # if 0.25 < r < 4:
 #     #     # Special case for r ≈ 1: improve initialization by first solving r=1 <=> α=β
@@ -409,7 +419,17 @@ def _draw_from_beta_scalar(r: Real, v: Real, rng: RNGenerator, n_samples: int=1,
         return rng.binomial(1, 1/(r+1), size=size)
     
     # Normal case
-    else:            
+    else:
+
+        if v < 1e-6:
+            # Some unlucky values, like r=2.2715995006941436, v=6.278153793994013e-08,
+            # seem to be particularly pathological for the root solver.
+            # At least in the case above, the function is continuous at those values
+            # (±ε returns very similar values for a and b).
+            # Replacing these by nearby values which are more friendly to binary representation
+            # seems to help.
+            v = digitize(v, rtol=1e-5, show=False)
+        
         # if 0.25 < r < 4:
         #     # Special case for r ≈ 1 and 1 < v < 1e5: Initialize on the α=β line
         #     # In this case the initialization (0,0) is unstable, so we 
@@ -481,7 +501,10 @@ def draw_from_beta(r: Union[Real,Array[float,1]],
 #              (0.5, 0.5), (0.5, 0.1), (0.5, 1),
 #              (1, 0.5), (1, 1e1), (1, 30), (1, 50), (1, 70), (1, 1e2), (1, 1e3), (1, 1e5), (1, 1e6),
 #              (5, 0.5), (5, 8), (5, 1e4), (5, 2e4), (5, 4e4), (5, 1e6), (5, 1e8), (5, 1e16), (5, 1e32),
-#              (6.24122778821756, 414.7130462762959)],
+#              (6.24122778821756, 414.7130462762959),
+#              (2.2715995006941436, 6.278153793994013e-08),
+#              (2.271457193328191, 6.075242708902806e-08)
+#             ],
 #         itertools.cycle(config.figures.colors.bright.cycle)):
 #     rv = get_beta_rv(r, v)
 #     if isinstance(rv.dist, scipy.stats.rv_discrete):
@@ -716,7 +739,7 @@ def generate_path_binary_partition(
 # ### Generate ensemble of sample paths
 #
 # To generate $R$ paths, we repeat the following $R$ times:
-# 1. Select start and end points by sampling $\nN(\tilde{Φ}[0], \lnLt{}[0])$ and $\nN(\tilde{Φ}[-1], \lnLt{}[-1])$.
+# 1. Select start and end points by sampling $\nN(\tilde{Φ}[0], \lnLtt{}[0])$ and $\nN(\tilde{Φ}[-1], \lnLtt{}[-1])$.
 # 2. Call `generate_path_binary_partition`.
 
 # %%
