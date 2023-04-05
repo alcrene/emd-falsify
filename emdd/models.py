@@ -66,7 +66,7 @@ from abc import ABC, abstractmethod
 from collections import Counter
 from collections.abc import Callable, Sequence
 from functools import lru_cache
-from dataclasses import dataclass, InitVar
+from dataclasses import InitVar, dataclass
 from typing import Union, Tuple
 
 from more_itertools import always_iterable
@@ -74,6 +74,8 @@ import numpy as np
 from numpy.random import Generator, PCG64
 from scipy import stats
 from scipy.optimize import root_scalar, minimize
+
+from scityping import NoneType, Dataclass
 
 # %% tags=["remove-cell"]
 SeedType = Union[None,int,Tuple[int]]
@@ -168,10 +170,14 @@ SeedType = Union[None,int,Tuple[int]]
 # :::
 
 # %%
+@dataclass(frozen=True)
 class Model(ABC):
     @abstractmethod
     def __call__(self, *arg):
         raise NotImplementedError
+    @classmethod
+    def __get_validators__(cls):  # WIP: Find a clean way for these model types
+        yield Dataclass.validate  #   to automatically deserialize w/ Pydantic
 
 
 # %%
@@ -179,6 +185,9 @@ class Model(ABC):
 class FullModel:
     phys: Model
     obs : Model
+    @classmethod
+    def __get_validators__(cls):
+        yield Dataclass.validate
 
 
 # %% [markdown]
@@ -353,7 +362,7 @@ class LinspaceX(Model):
 @dataclass(frozen=True)
 class DeterministicExpon(Model):
     λ: float=1.
-    seed: None=None  # Only for consistency with probabilistic models
+    seed: NoneType=None  # Only for consistency with probabilistic models
     def __call__(self, x):
         return np.exp(-self.λ*x)
 
