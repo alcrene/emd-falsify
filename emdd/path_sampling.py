@@ -9,17 +9,17 @@
 #       format_name: percent
 #       format_version: '1.3'
 #   kernelspec:
-#     display_name: Python (EMD-paper)
+#     display_name: Python (EMD paper)
 #     language: python
 #     name: emd-paper
 # ---
 
-# %% [markdown]
+# %% [markdown] tags=[] user_expressions=[]
 # (sec_path-sampling)=
 # # Sampling quantile paths
-#
-# $
-# \renewcommand{\lnLtt}{\tilde{l}}
+
+# %% [markdown] tags=[] user_expressions=[]
+# $\renewcommand{\lnLtt}{\tilde{l}}
 # \renewcommand{\lnLh}[1][]{\hat{l}_{#1}}
 # \renewcommand{\EE}{\mathbb{E}}
 # \renewcommand{\VV}{\mathbb{V}}
@@ -48,7 +48,7 @@ from scityping.numpy import Array, Generator as RNGenerator
 
 from emdd.digitize import digitize  # Used to improve numerical stability when finding Beta parameters
 
-# %% [markdown] tags=["remove-cell"]
+# %% [markdown] tags=["remove-cell"] user_expressions=[]
 # Notebook-only imports
 
 # %% tags=["active-ipynb", "hide-input"]
@@ -67,7 +67,7 @@ from emdd.digitize import digitize  # Used to improve numerical stability when f
 logger = logging.getLogger(__name__)
 
 
-# %% [markdown]
+# %% [markdown] tags=[] user_expressions=[]
 # We want to generate paths $\lnLh$ for the quantile function $l(Φ)$, with $Φ \in [0, 1]$, from a stochastic process $\pathP$ determined by $\lnLtt(Φ)$ and $\emdstd(Φ)$. This process must satisfy the following requirements:
 # - It must generate only monotone paths, since quantile functions are monotone.
 # - The process must be heteroscedastic, with variability at $Φ$ given by $\emdstd(Φ)$.
@@ -76,10 +76,10 @@ logger = logging.getLogger(__name__)
 #   + In particular, we want to avoid defining a stochastic process which starts at one point and accumulates variance, like the $\sqrt{t}$ envelope characteristic of a Gaussian white noise.
 #   + Concretely, we require the process to be “$Φ$-symmetric”: replacing $\lnLtt(Φ) \to \lnLtt(-Φ)$ and $\emdstd(Φ) \to \emdstd(-Φ)$ should define the same process, just inverted along the $Φ$ axis.
 
-# %% [markdown]
+# %% [markdown] user_expressions=[]
 # ## Hierarchical beta process
 
-# %% [markdown]
+# %% [markdown] user_expressions=[]
 # Because the joint requirements of monotonicity, non-stationarity and $Φ$-symmetry are uncommon for a stochastic process, some care is required to define an appropriate $\pathP$. The approach we choose here is to first select the end points $\lnLh(0)$ and $\lnLh(1)$, then fill the interval by successive binary partitions: first $\bigl\{\lnLh\bigl(\tfrac{1}{2}\bigl)\bigr\}$, then $\bigl\{\lnLh\bigl(\tfrac{1}{4}\bigr), \lnLh\bigl(\tfrac{3}{4}\bigr)\bigr\}$, $\bigl\{\lnLh\bigl(\tfrac{1}{8}\bigr), \lnLh\bigl(\tfrac{3}{8}\bigr), \lnLh\bigl(\tfrac{5}{8}\bigr), \lnLh\bigl(\tfrac{7}{8}\bigr)\bigr\}$, etc. (Below we will denote these ensembles $\{\lnLh\}^{(1)}$, $\{\lnLh\}^{(2)}$, $\{\lnLh\}^{(3)}$, etc.) Thus integrating over paths becomes akin to a path integral with variable end points.
 # Moreover, instead of drawing quantile values, we draw increments
 # $$Δ l_{ΔΦ}(Φ) := \lnLh(Φ+ΔΦ) - \lnLh(Φ) \,.$$ (eq_def-quantile-increment)
@@ -93,7 +93,7 @@ logger = logging.getLogger(__name__)
 # $$p(x_1) \propto x^{α-1} (1-x)^{β-1}\,,$$ (eq_beta-pdf)
 # with $α$ and $β$ parameters to be determined.
 
-# %% [markdown]
+# %% [markdown] user_expressions=[]
 # :::{IMPORTANT}  
 # An essential property of a stochastic process is *consistency*: it must not matter exactly how we discretize the interval {cite:p}`gillespieMathematicsBrownianMotion1996`. Let $\{\lnLh\}^{(n)}$ denote the steps which are added when we refine the discretization from steps of $2^{-n+1}$ to steps of $2^{-n}$:
 # $$\{\lnLh\}^{(n)} := \bigl\{\lnLh(k\cdot 2^{-n}) \,\big|\, k=1,3,\dotsc,2^n \bigr\} \,.$$ (eq_added-steps)
@@ -104,10 +104,10 @@ logger = logging.getLogger(__name__)
 # We have found that failure to satisfy this requirement leads to unsatisfactory sampling of quantile paths. In particular, naive procedures tend to perform worse as $ΔΦ$ is reduced, making accurate integration impossible.
 # :::
 
-# %% [markdown]
+# %% [markdown] user_expressions=[]
 # [^1]: One could conceivably draw all increments at once, with a [*shifted scaled Dirichlet distribution*](https://doi.org/10.1007/978-3-030-71175-7_4) instead of a beta, if it can be shown that also in this case coarsening the distribution still results in the same probability law.
 
-# %% [markdown]
+# %% [markdown] user_expressions=[]
 # ### Conditions for choosing the beta parameters
 #
 # To draw an increment $Δ l_{2^{-n}}$, we need to convert $\lnLtt(Φ)$ and $\emdstd(Φ)$ (obtained from the model discrepancy analysis) into beta distribution parameters $α$ and $β$. If $x_1$ follows a beta distribution, then its first two cumulants are given by
@@ -124,30 +124,30 @@ logger = logging.getLogger(__name__)
 # Here $ψ$ and $ψ_1$ are the digamma and trigamma functions respectively.
 # (In addition to ontological considerations, it is much more straightforward to define a consistent stochastic process using the center and metric variance. For example, since the metric variance is unbounded, we can easily scale it with $\emdstd(Φ)$.)
 
-# %% [markdown]
+# %% [markdown] user_expressions=[]
 # Since we want the sum to be $d := \lnLh(Φ+2^{-n+1}) - \lnLh(Φ)$, we define
 # $$\bigl[Δ l_{2^{-n}}\bigl(Φ\bigr),\, Δ l_{2^{-n}}\bigl(Φ+2^{-n})\bigr)\bigr] = d \cdot \bigl[x_1, x_2\bigr] \,.$$  (eq_relation-beta-increment)
 # Then
 
-# %% [markdown]
+# %% [markdown] user_expressions=[]
 # $$\begin{aligned}
 # \EE_a\Bigl[\bigl[Δ l_{2^{-n}}\bigl(Φ\bigr),\, Δ l_{2^{-n}}\bigl(Φ+2^{-n}\bigr)\bigr]\Bigr] &= \frac{d}{e^{ψ(α)} + e^{ψ(β)}} \bigl[e^{ψ(α)}, e^{ψ(β)}\bigr] \,, \\
 # \Mvar\Bigl[\bigl[Δ l_{2^{-n}}\bigl(Φ\bigr),\, Δ l_{2^{-n}}\bigl(Φ+2^{-n}\bigr)\bigr]\Bigr] &= \frac{1}{2} \bigl(ψ_1(α) + ψ_1(β)\bigr) \,.
 # \end{aligned}$$
 
-# %% [markdown]
+# %% [markdown] user_expressions=[]
 # We now choose to define the parameters $α$ and $β$ via the following relations:
 # $$\begin{aligned}
 # \EE_a\Bigl[\bigl[Δ l_{2^{-n}}\bigl(Φ\bigr),\, Δ l_{2^{-n}}\bigl(Φ+2^{-n}\bigr)\bigr]\Bigr] &=^* \bigl[\, \lnLtt\bigl(Φ+2^{-n}\bigr) - \lnLtt\bigl(Φ\bigr),\,\lnLtt\bigl(Φ+2^{-n+1}\bigr) - \lnLtt\bigl(Φ+2^{-n}\bigr) \,\bigr]\,, \\
 # \Mvar\Bigl[\bigl[Δ l_{2^{-n}}\bigl(Φ\bigr),\, Δ l_{2^{-n}}\bigl(Φ+2^{-n}\bigr)\bigr]\Bigr] &\stackrel{!}{=} \emdstd\bigl(Φ+2^{-n}\bigr)^2 \,.
 # \end{aligned}$$ (eq_defining-conditions-a)
 
-# %% [markdown]
+# %% [markdown] user_expressions=[]
 # These follow from interpretating $\lnLtt$ and $\emdstd$ as estimators for the mean and square root of the metric variance.
 # We use $=^*$ to indicate equality in spirit rather than true equality, since strictly speaking, these are 3 equations for 2 unknown. To reduce the $\EE_a$ equations to one, we use instead
 # $$\frac{\EE_a\bigl[Δ l_{2^{-n}}\bigl(Φ\bigr)\bigr]}{\EE_a \bigl[Δ l_{2^{-n}}\bigl(Φ+2^{-n}\bigr)\bigr]} \stackrel{!}{=} \frac{\lnLtt\bigl(Φ+2^{-n}\bigr) - \lnLtt\bigl(Φ\bigr)}{\lnLtt\bigl(Φ+2^{-n+1}\bigr) - \lnLtt\bigl(Φ+2^{-n}\bigr)} \,.$$ (eq_defining_conditions-b)
 
-# %% [markdown] tags=["remove-cell"]
+# %% [markdown] tags=["remove-cell"] user_expressions=[]
 # ---
 #
 # TO REMOVE: I originally put a $2^{-n}$ coefficient in front of $\Mvar$. I don't think it's warranted anymore, since we already scale with $d$.
@@ -156,7 +156,7 @@ logger = logging.getLogger(__name__)
 #
 # ---
 
-# %% [markdown]
+# %% [markdown] user_expressions=[]
 # **Remarks**
 # - We satisfy the necessary condition for consistency by construction:
 #   $$p\bigl(\{l\}^{(n)}\bigr)\bigr) = \int p\bigl(\{l\}^{(n)} \,\big|\, \{l\}^{(n+1)}\bigr) \,d\{l\}^{(n+1)}\,.$$
@@ -167,10 +167,10 @@ logger = logging.getLogger(__name__)
 # - Our defining equations make equivalent use of the pre ($Δ l_{2^{-n}}(Φ)$) and post ($Δ l_{2^{-n}}(Φ+2^{-n})$) increments, thus preserving symmetry in $Φ$.
 # - Step sizes of the form $2^{-n}$ have exact representations in binary. Thus even small step sizes should not introduce additional numerical errors.
 
-# %% [markdown]
+# %% [markdown] user_expressions=[]
 # ### Formulation of the parameter equations as a root-finding problem
 
-# %% [markdown]
+# %% [markdown] tags=[] user_expressions=[]
 # Define
 # $$\begin{align}
 # r &:= \frac{\lnLtt(Φ+2^{-n}) - \lnLtt(Φ)}{\lnLtt(Φ+2^{-n+1}) - \lnLtt(Φ+2^{-n})} \,; \\
@@ -180,11 +180,11 @@ logger = logging.getLogger(__name__)
 # Setting $\frac{e^{ψ(α)}}{e^{ψ(β)}} = r$, the two equations we need to solve for $α$ and $β$ can be written
 # $$\begin{align}
 # ψ(α) - ψ(β) &= \ln r \,; \\
-# ψ_1(α) + ψ_1(β) &= v \,.
+# \ln\bigl[ ψ_1(α) + ψ_1(β) \bigr] &= \ln v \,.
 # \end{align}$$ (eq_root-finding-problem_supp)
-# (Definitions repeated from Eqs. \eqref{eq_root-finding-problem__r,eq_root-finding-problem__v}.) Note that these equations are symmetric in $Φ$: replacing $Φ$ by $-Φ$ simply changes the sign on both sides of the first.
+# (Definitions repeated from Eqs. \eqref{eq_root-finding-problem__r,eq_root-finding-problem__v}.) Note that these equations are symmetric in $Φ$: replacing $Φ$ by $-Φ$ simply changes the sign on both sides of the first. The use of the logarithm in the equation for $v$ helps to stabilize the numerics.
 
-# %% [markdown] tags=["remove-cell"]
+# %% [markdown] tags=["remove-cell"] user_expressions=[]
 # :::{margin}
 # ~~To allow solving for multiple $α$, $β$ simultaneously, we solve for a flat vector $\left(\begin{smallmatrix}α\\β\end{smallmatrix}\right)$. Despite the much higher-dimensional space, this reliable enough for our use.~~
 # :::
@@ -195,15 +195,15 @@ def f(lnαβ, lnr_v, _array=np.array, _exp=np.exp, digamma=digamma, polygamma=po
     lnr, v = lnr_v
     return _array((
         digamma(α) - digamma(β) - lnr,
-        polygamma(1, α) + polygamma(1, β) - v
+        np.log(polygamma(1, α) + polygamma(1, β)) - np.log(v)
     )).flat
 
 def f_mid(lnα, v, _exp=np.exp, polygamma=polygamma):
     "1-d equation, for the special case α=β (equiv to r=1)"
-    return 2*polygamma(1, _exp(lnα)) - v
+    return np.log(2*polygamma(1, _exp(lnα))) - np.log(v)
 
 
-# %% [markdown]
+# %% [markdown] user_expressions=[]
 # :::{margin}  
 # This implementation of the Jacobian is tested for both scalar and vector inputs, but fits turned out to be both faster and more numerically stable when they don't use it.
 # Therefore we keep it only for reference and illustration purposes.  
@@ -217,7 +217,7 @@ def f_mid(lnα, v, _exp=np.exp, polygamma=polygamma):
 #                      [np.diagflat(polygamma(1,α)*lnα), np.diagflat(polygamma(1,β)*lnβ)]])
 #     return j
 
-# %% [markdown]
+# %% [markdown] user_expressions=[]
 # The functions $ψ$ and $ψ_1$ diverge at zero, so $α$ and $β$ should remain positive. Therefore it makes sense to fit their logarithm: this enforces the lower bound, and improves the resolution where the derivative is highest. The two objective functions (up to scalar shift) are plotted below: the region for low $\ln α$ and $\ln β$ shows sharp variation around $α=β$, suggesting that this area may be most challenging for a numerical optimizer. In practice this is indeed what we observed.
 #
 # We found however that we can make fits much more reliable by first choosing a suitable initialization point along the $\ln α = \ln β$ diagonal. In practice this means setting $α_0 = α = β$ and solving the 1d problem of Eq. \eqref{eq_root-finding-problem__v} for $α_0$. (We use the implementation of Brent’s method in SciPy.) Then we can solve the full 2d problem of Eqs. \eqref{eq_root-finding-problem__r,eq_root-finding-problem__v}, with $(α_0, α_0)$ as initial value. This procedure was successful for all values of $r$ and $v$ we encountered in our experiments.
@@ -257,7 +257,7 @@ def f_mid(lnα, v, _exp=np.exp, polygamma=polygamma):
 # %% tags=["remove-cell", "skip-execution", "active-ipynb"]
 # fig
 
-# %% [markdown]
+# %% [markdown] user_expressions=[]
 # :::{glue:figure} fig_polygamma
 # :figwidth: 400px
 # :name: fig_polygamma
@@ -265,7 +265,7 @@ def f_mid(lnα, v, _exp=np.exp, polygamma=polygamma):
 # Characterization of the digamma ($ψ$) and trigamma ($ψ_1$) functions, and of the metric variance $\Mvar$.  
 # :::
 
-# %% [markdown] tags=[]
+# %% [markdown] tags=[] user_expressions=[]
 # Plotting the eigenvalues of the Jacobian (specifically, the real part of the dominant eigenvalue) in fact highlights three regions with a center at roughly $(\ln α, \ln β) = (0, 0)$. (The Jacobian does not depend on $r$ or $v$, so this is true for all fit conditions). Empirically we found that initializing fits at $(0, 0)$ resulted in robust fits for a large number of $(r,v)$ tuples, even when $r > 100$. We hypothesize that this is because it is difficult for the fit to move from one region to another; by initializing where the Jacobian is small, fits are able to find the desired values before getting stuck in the wrong region.
 #
 # Note that the color scale is clipped, to better resolve values near zero. Eigenvalues quickly increase by multiple orders of magnitude away from $(0,0)$.
@@ -283,7 +283,7 @@ def f_mid(lnα, v, _exp=np.exp, polygamma=polygamma):
 # %% tags=["remove-cell", "skip-execution", "active-ipynb"]
 # fig
 
-# %% [markdown]
+# %% [markdown] user_expressions=[]
 # :::{glue:figure} fig_Jac-spectrum
 # :width: 300px
 # :name: fig_Jac-spectrum
@@ -293,7 +293,7 @@ def f_mid(lnα, v, _exp=np.exp, polygamma=polygamma):
 # In most cases, a root finding algorithm initialized at (0,0) will find a solution.
 # :::
 
-# %% [markdown]
+# %% [markdown] user_expressions=[]
 # ### Special cases for extreme values
 #
 # For extreme values of $r$ or $v$, the beta distribution becomes degenerate and numerical optimization may break. We identify four cases requiring special treatment.
@@ -376,14 +376,14 @@ def f_mid(lnα, v, _exp=np.exp, polygamma=polygamma):
 #         # (Actual draw function replaces beta by a Bernoulli in this case)
 #         return scipy.stats.bernoulli(1/(r+1))
 #     
-#     if v < 1e-6:
-#         # Some unlucky values, like r=2.2715995006941436, v=6.278153793994013e-08,
-#         # seem to be particularly pathological for the root solver.
-#         # At least in the case above, the function is continuous at those values
-#         # (±ε returns very similar values for a and b).
-#         # Replacing these by nearby values which are more friendly to binary representation
-#         # seems to help.
-#         v = digitize(v, rtol=1e-5, show=False)
+#     # if v < 1e-6:
+#     #     # Some unlucky values, like r=2.2715995006941436, v=6.278153793994013e-08,
+#     #     # seem to be particularly pathological for the root solver.
+#     #     # At least in the case above, the function is continuous at those values
+#     #     # (±ε returns very similar values for a and b).
+#     #     # Replacing these by nearby values which are more friendly to binary representation
+#     #     # seems to help.
+#     #     v = digitize(v, rtol=1e-5, show=False)
 #     
 #     # if 0.25 < r < 4:
 #     #     # Special case for r ≈ 1: improve initialization by first solving r=1 <=> α=β
@@ -412,7 +412,7 @@ def _draw_from_beta_scalar(r: Real, v: Real, rng: RNGenerator, n_samples: int=1,
     elif r > 1e12:
         special_val = 0           # EXIT AT END
     # Special cases for extreme values of v
-    elif v < 5e-8:
+    elif v < 1e-8:
         special_val = 1 / (1+r)   # EXIT AT END
     elif v > 1e4:
         # Replace beta by a Bernouilli distribution
@@ -421,14 +421,14 @@ def _draw_from_beta_scalar(r: Real, v: Real, rng: RNGenerator, n_samples: int=1,
     # Normal case
     else:
 
-        if v < 1e-6:
-            # Some unlucky values, like r=2.2715995006941436, v=6.278153793994013e-08,
-            # seem to be particularly pathological for the root solver.
-            # At least in the case above, the function is continuous at those values
-            # (±ε returns very similar values for a and b).
-            # Replacing these by nearby values which are more friendly to binary representation
-            # seems to help.
-            v = digitize(v, rtol=1e-5, show=False)
+        # if v < 1e-6:
+        #     # Some unlucky values, like r=2.2715995006941436, v=6.278153793994013e-08,
+        #     # seem to be particularly pathological for the root solver.
+        #     # At least in the case above, the function is continuous at those values
+        #     # (±ε returns very similar values for a and b).
+        #     # Replacing these by nearby values which are more friendly to binary representation
+        #     # seems to help.
+        #     v = digitize(v, rtol=1e-5, show=False)
         
         # if 0.25 < r < 4:
         #     # Special case for r ≈ 1 and 1 < v < 1e5: Initialize on the α=β line
@@ -482,10 +482,10 @@ def draw_from_beta(r: Union[Real,Array[float,1]],
         return _draw_from_beta_scalar(r, v, rng, n_samples)
 
 
-# %% [markdown]
+# %% [markdown] user_expressions=[]
 # ### Examples of different fitted beta distributions
 
-# %% [markdown]
+# %% [markdown] user_expressions=[]
 # Plotted below are the beta distributions for different values of $r$ and $v$.
 
 # %% tags=["active-ipynb", "hide-input", "full-width"]
@@ -503,7 +503,8 @@ def draw_from_beta(r: Union[Real,Array[float,1]],
 #              (5, 0.5), (5, 8), (5, 1e4), (5, 2e4), (5, 4e4), (5, 1e6), (5, 1e8), (5, 1e16), (5, 1e32),
 #              (6.24122778821756, 414.7130462762959),
 #              (2.2715995006941436, 6.278153793994013e-08),
-#              (2.271457193328191, 6.075242708902806e-08)
+#              (2.271457193328191, 6.075242708902806e-08),
+#              (2.269182419251242, 6.794061846449025e-08),
 #             ],
 #         itertools.cycle(config.figures.colors.bright.cycle)):
 #     rv = get_beta_rv(r, v)
@@ -542,7 +543,19 @@ def draw_from_beta(r: Union[Real,Array[float,1]],
 # dists.opts(width=500, backend="bokeh")
 # dists.opts(fig_inches=7, aspect=2.5, legend_cols=2, backend="matplotlib")
 
-# %% [markdown]
+# %% [markdown] tags=["remove-cell", "skip-execution"] user_expressions=[]
+# Extra test, for a point that is especially sensitive to numerical issues: despite the very tight distribution, only 10-25% points raise a warning.
+
+# %% tags=["remove-cell", "skip-execution"]
+r=2.2691824192512438;    Δr = 0.000000000000001
+v=6.79406184644904e-08;  Δv = 1e-22
+s=2
+rng = np.random.default_rng(45)
+for r,v in rng.uniform([r-s*Δr, v-s*Δv], [r+s*Δr, v+s*Δv], size=(40,2)):
+    draw_from_beta(r,v)
+
+
+# %% [markdown] user_expressions=[]
 # Statistics for the fitted beta distributions. $\mathbb{E}[x_1]$ and $\mathrm{std}[x_1]$ are computed from 4000 samples. $\mathbb{E}_a[x_1]$ and $\mathrm{Mvar}[x_1,x_2]$ are computed using the expressions above.
 
 # %% tags=["active-ipynb", "hide-input", "full-width"]
@@ -562,7 +575,7 @@ def draw_from_beta(r: Union[Real,Array[float,1]],
 # stattable.opts(max_rows=len(stattable)+1)  # Ensure all rows are shown
 # stattable.opts(fig_inches=18, aspect=2.5, max_value_len=30, hooks=[clean_table_mpl], backend="matplotlib")
 
-# %% [markdown] tags=["remove-cell"]
+# %% [markdown] tags=["remove-cell"] user_expressions=[]
 # `draw_from_beta` also supports passing `r` and `v` as vectors. This is mostly a convenience: internally the vectors are unpacked and $(α,β)$ are solved for individually.
 
 # %% tags=["active-ipynb", "skip-execution", "remove-cell", "full-width"]
@@ -586,7 +599,7 @@ def draw_from_beta(r: Union[Real,Array[float,1]],
 # stattable.opts(max_rows=len(stattable)+1)
 # stattable.opts(fig_inches=14, aspect=1.8, max_value_len=30, hooks=[clean_table_mpl], backend="matplotlib")
 
-# %% [markdown]
+# %% [markdown] user_expressions=[]
 # ### Timings for the root solver
 
 # %% [markdown]
