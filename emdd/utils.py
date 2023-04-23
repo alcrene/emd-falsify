@@ -98,10 +98,12 @@ glue.default_holoviews_backend = None
 
 # ## format_scientific
 
-def format_scientific(a: Union[int,float], sig_digits=3) -> str:
+def format_scientific(a: Union[int,float], sig_digits=3, tex=False) -> str:
     """
     Format a number in scientific notation, with the requested number of
     significant digits.
+
+    :param:tex: If True, format the result as a TeX string enclosed with `$`.
     """
     # First deal with the sign, since log10 requires strictly positive values
     if a < 0:
@@ -112,13 +114,15 @@ def format_scientific(a: Union[int,float], sig_digits=3) -> str:
     else:
         sgn = ""
     # First round the number to avoid issues with things like 0.99999
+    ## vvv EARLY EXITS vvv ##
     if not math.isfinite(a):
         if a == math.inf:
-            return "∞"
+            return "$\\infty$" if tex else "∞"
         elif a == -math.inf:
-            return "-∞"
+            return "-$\\infty$" if tex else "-∞"
         else:
             return str(a)
+    ## ^^^ EARLY EXITS ^^^ ##
     p = int(math.log10(a))
     if p >= 0:
         a = round(a / 10**p, sig_digits-1)
@@ -136,9 +140,14 @@ def format_scientific(a: Union[int,float], sig_digits=3) -> str:
     #i = int(a // 10**p2)
     #f = str(a % 10**p2).replace('.','')[:sig_digits-1]
     if p == 0:
-        return f"{sgn}{i}.{f}"
+        s = f"{sgn}{i}.{f}"
     else:
-        return f"{sgn}{i}.{f}×10{make_int_superscript(p)}"
+        if tex:
+            s = f"{sgn}{i}.{f} \\times 10^{{{make_int_superscript(p)}}}"
+        else:
+            s = f"{sgn}{i}.{f}×10{make_int_superscript(p)}"
+
+    return f"${s}$" if tex else s
 
 # ### Test
 
