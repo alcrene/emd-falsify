@@ -9,16 +9,16 @@
 #       format_name: percent
 #       format_version: '1.3'
 #   kernelspec:
-#     display_name: Python (EMD paper)
+#     display_name: Python (EMD-paper)
 #     language: python
 #     name: emd-paper
 # ---
 
-# %% [markdown] tags=[] user_expressions=[]
-# (sec_path-sampling)=
+# %% [markdown]
+# (supp_path-sampling)=
 # # Sampling quantile paths
 
-# %% [markdown] tags=[] user_expressions=[]
+# %% [markdown]
 # $\renewcommand{\lnLtt}{\tilde{l}}
 # \renewcommand{\lnLh}[1][]{\hat{l}_{#1}}
 # \renewcommand{\EE}{\mathbb{E}}
@@ -58,8 +58,7 @@ from emdd.digitize import digitize  # Used to improve numerical stability when f
 # from myst_nb import glue
 #
 # from emdd.utils import GitSHA
-# from emdd import Config
-# config  = Config()
+# from config import config  # Uses config from CWD
 #
 # hv.extension(config.figures.backend)
 
@@ -67,7 +66,7 @@ from emdd.digitize import digitize  # Used to improve numerical stability when f
 logger = logging.getLogger(__name__)
 
 
-# %% [markdown] tags=[] user_expressions=[]
+# %% [markdown] user_expressions=[]
 # We want to generate paths $\lnLh$ for the quantile function $l(Φ)$, with $Φ \in [0, 1]$, from a stochastic process $\pathP$ determined by $\lnLtt(Φ)$ and $\emdstd(Φ)$. This process must satisfy the following requirements:
 # - It must generate only monotone paths, since quantile functions are monotone.
 # - The process must be heteroscedastic, with variability at $Φ$ given by $\emdstd(Φ)$.
@@ -77,6 +76,7 @@ logger = logging.getLogger(__name__)
 #   + Concretely, we require the process to be “$Φ$-symmetric”: replacing $\lnLtt(Φ) \to \lnLtt(-Φ)$ and $\emdstd(Φ) \to \emdstd(-Φ)$ should define the same process, just inverted along the $Φ$ axis.
 
 # %% [markdown] user_expressions=[]
+# (supp_path-sampling_hierarchical-beta)=
 # ## Hierarchical beta process
 
 # %% [markdown] user_expressions=[]
@@ -108,6 +108,7 @@ logger = logging.getLogger(__name__)
 # [^1]: One could conceivably draw all increments at once, with a [*shifted scaled Dirichlet distribution*](https://doi.org/10.1007/978-3-030-71175-7_4) instead of a beta, if it can be shown that also in this case coarsening the distribution still results in the same probability law.
 
 # %% [markdown] user_expressions=[]
+# (supp_path-sampling_conditions-beta-param)=
 # ### Conditions for choosing the beta parameters
 #
 # To draw an increment $Δ l_{2^{-n}}$, we need to convert $\lnLtt(Φ)$ and $\emdstd(Φ)$ (obtained from the model discrepancy analysis) into beta distribution parameters $α$ and $β$. If $x_1$ follows a beta distribution, then its first two cumulants are given by
@@ -168,21 +169,22 @@ logger = logging.getLogger(__name__)
 # - Step sizes of the form $2^{-n}$ have exact representations in binary. Thus even small step sizes should not introduce additional numerical errors.
 
 # %% [markdown] user_expressions=[]
+# (supp_path-sampling_beta-param-algorithm)=
 # ### Formulation of the parameter equations as a root-finding problem
 
-# %% [markdown] tags=[] user_expressions=[]
+# %% [markdown] user_expressions=[]
 # Define
 # $$\begin{align}
 # r &:= \frac{\lnLtt(Φ+2^{-n}) - \lnLtt(Φ)}{\lnLtt(Φ+2^{-n+1}) - \lnLtt(Φ+2^{-n})} \,; \\
 # v &:= \frac{1}{2} \emdstd\bigl(Φ + 2^{-n}\bigr)^2 \,.
 # \end{align}$$ (eq_def-r-v_supp) 
-# (Definitions repeated from Eqs. \eqref{eq_def-r-v__r,eq_def-r-v__v}.) The first value, $r$, is the ratio of two subincrements within $Δ l_{2^{-n+1}}(Φ)$.
+# (Definitions repeated from Eqs. \labelcref{eq_def-r-v__r,eq_def-r-v__v}.) The first value, $r$, is the ratio of two subincrements within $Δ l_{2^{-n+1}}(Φ)$.
 # Setting $\frac{e^{ψ(α)}}{e^{ψ(β)}} = r$, the two equations we need to solve for $α$ and $β$ can be written
 # $$\begin{align}
 # ψ(α) - ψ(β) &= \ln r \,; \\
 # \ln\bigl[ ψ_1(α) + ψ_1(β) \bigr] &= \ln v \,.
 # \end{align}$$ (eq_root-finding-problem_supp)
-# (Definitions repeated from Eqs. \eqref{eq_root-finding-problem__r,eq_root-finding-problem__v}.) Note that these equations are symmetric in $Φ$: replacing $Φ$ by $-Φ$ simply changes the sign on both sides of the first. The use of the logarithm in the equation for $v$ helps to stabilize the numerics.
+# (Definitions repeated from Eqs. \labelcref{eq_root-finding-problem__r,eq_root-finding-problem__v}.) Note that these equations are symmetric in $Φ$: replacing $Φ$ by $-Φ$ simply changes the sign on both sides of the first. The use of the logarithm in the equation for $v$ helps to stabilize the numerics.
 
 # %% [markdown] tags=["remove-cell"] user_expressions=[]
 # :::{margin}
@@ -220,7 +222,7 @@ def f_mid(lnα, v, _exp=np.exp, polygamma=polygamma):
 # %% [markdown] user_expressions=[]
 # The functions $ψ$ and $ψ_1$ diverge at zero, so $α$ and $β$ should remain positive. Therefore it makes sense to fit their logarithm: this enforces the lower bound, and improves the resolution where the derivative is highest. The two objective functions (up to scalar shift) are plotted below: the region for low $\ln α$ and $\ln β$ shows sharp variation around $α=β$, suggesting that this area may be most challenging for a numerical optimizer. In practice this is indeed what we observed.
 #
-# We found however that we can make fits much more reliable by first choosing a suitable initialization point along the $\ln α = \ln β$ diagonal. In practice this means setting $α_0 = α = β$ and solving the 1d problem of Eq. \eqref{eq_root-finding-problem__v} for $α_0$. (We use the implementation of Brent’s method in SciPy.) Then we can solve the full 2d problem of Eqs. \eqref{eq_root-finding-problem__r,eq_root-finding-problem__v}, with $(α_0, α_0)$ as initial value. This procedure was successful for all values of $r$ and $v$ we encountered in our experiments.
+# We found however that we can make fits much more reliable by first choosing a suitable initialization point along the $\ln α = \ln β$ diagonal. In practice this means setting $α_0 = α = β$ and solving the 1d problem of Eq. \labelcref{eq_root-finding-problem__v} for $α_0$. (We use the implementation of Brent’s method in SciPy.) Then we can solve the full 2d problem of Eqs. \labelcref{eq_root-finding-problem__r,eq_root-finding-problem__v}, with $(α_0, α_0)$ as initial value. This procedure was successful for all values of $r$ and $v$ we encountered in our experiments.
 
 # %% tags=["active-ipynb", "hide-input"]
 # α = np.logspace(-2, 1.2)
@@ -250,23 +252,24 @@ def f_mid(lnα, v, _exp=np.exp, polygamma=polygamma):
 #                     vdims=[dim_lnMvar], label=dim_lnMvar.name).opts(title=dim_lnMvar.label)
 # fig.opts(hv.opts.QuadMesh(colorbar=True, clabel=""))
 # fig.opts(fig_inches=3, sublabel_format="", vspace=0.4, backend="matplotlib")
-# fig.cols(2)
+# fig.cols(2);
 #
-# glue("fig_polygamma", fig, display=None)
+# #glue("fig_polygamma", fig, display=None)
 
-# %% tags=["remove-cell", "skip-execution", "active-ipynb"]
-# fig
+# %% tags=["remove-cell", "active-ipynb"]
+# path = config.paths.figuresdir/f"path-sampling_polygamma"
+# hv.save(fig, path.with_suffix(".svg"), backend="matplotlib")
+# hv.save(fig, path.with_suffix(".pdf"), backend="matplotlib")
 
 # %% [markdown] user_expressions=[]
-# :::{glue:figure} fig_polygamma
-# :figwidth: 400px
+# :::{figure} ../figures/path-sampling_polygamma.svg
 # :name: fig_polygamma
 #
 # Characterization of the digamma ($ψ$) and trigamma ($ψ_1$) functions, and of the metric variance $\Mvar$.  
 # :::
 
-# %% [markdown] tags=[] user_expressions=[]
-# Plotting the eigenvalues of the Jacobian (specifically, the real part of the dominant eigenvalue) in fact highlights three regions with a center at roughly $(\ln α, \ln β) = (0, 0)$. (The Jacobian does not depend on $r$ or $v$, so this is true for all fit conditions). Empirically we found that initializing fits at $(0, 0)$ resulted in robust fits for a large number of $(r,v)$ tuples, even when $r > 100$. We hypothesize that this is because it is difficult for the fit to move from one region to another; by initializing where the Jacobian is small, fits are able to find the desired values before getting stuck in the wrong region.
+# %% [markdown] user_expressions=[]
+# Plotting the eigenvalues of the Jacobian (specifically, the real part of its dominant eigenvalue) in fact highlights three regions with a center at roughly $(\ln α, \ln β) = (0, 0)$. (The Jacobian does not depend on $r$ or $v$, so this is true for all fit conditions). Empirically we found that initializing fits at $(0, 0)$ resulted in robust fits for a large number of $(r,v)$ tuples, even when $r > 100$. We hypothesize that this is because it is difficult for the fit to move from one region to another; by initializing where the Jacobian is small, fits are able to find the desired values before getting stuck in the wrong region.
 #
 # Note that the color scale is clipped, to better resolve values near zero. Eigenvalues quickly increase by multiple orders of magnitude away from $(0,0)$.
 #
@@ -278,14 +281,15 @@ def f_mid(lnα, v, _exp=np.exp, polygamma=polygamma):
 #             label="Real part of dom. eig val"
 #            ).opts(clim=(-1, 1), cmap="gwv",
 #                   colorbar=True)
-# glue("fig_Jac-spectrum", fig, display=False)
+# #glue("fig_Jac-spectrum", fig, display=False)
 
-# %% tags=["remove-cell", "skip-execution", "active-ipynb"]
-# fig
+# %% tags=["remove-cell", "active-ipynb"]
+# path = config.paths.figuresdir/f"path-sampling_jac-spectrum"
+# hv.save(fig, path.with_suffix(".svg"), backend="matplotlib")
+# hv.save(fig, path.with_suffix(".pdf"), backend="matplotlib")
 
 # %% [markdown] user_expressions=[]
-# :::{glue:figure} fig_Jac-spectrum
-# :width: 300px
+# :::{figure} ../figures/path-sampling_jac-spectrum.svg
 # :name: fig_Jac-spectrum
 #
 # **Objective function has a saddle-point around (0,0)**
@@ -294,6 +298,7 @@ def f_mid(lnα, v, _exp=np.exp, polygamma=polygamma):
 # :::
 
 # %% [markdown] user_expressions=[]
+# (supp_path-sampling_beta-param-special-cases)=
 # ### Special cases for extreme values
 #
 # For extreme values of $r$ or $v$, the beta distribution becomes degenerate and numerical optimization may break. We identify four cases requiring special treatment.
@@ -348,7 +353,7 @@ def f_mid(lnα, v, _exp=np.exp, polygamma=polygamma):
 # $$\begin{aligned}
 # w_1 &= \frac{r}{r+1}\,, & w_2 &= \frac{1}{r+1} \,.
 # \end{aligned}$$
-# (For this special case, we revert to writing the condition in terms of a standard (Lebesgue) expectation, since the center (Eq. \eqref{eq_Aitchison-moments__EE}) is undefined when $α, β \to 0$.)
+# (For this special case, we revert to writing the condition in terms of a standard (Lebesgue) expectation, since the center (Eq. \labelcref{eq_Aitchison-moments__EE}) is undefined when $α, β \to 0$.)
 #
 # Since we have already considered the special cases $r = 0$ and $r \to \infty$, we can assume $0 < r < \infty$. Then both $α$ and $β$ are zero, and $x_1$ should be a Bernoulli random variable with success probability $p = w_2 = \frac{1}{r+1}$.
 #
@@ -483,6 +488,7 @@ def draw_from_beta(r: Union[Real,Array[float,1]],
 
 
 # %% [markdown] user_expressions=[]
+# (supp_path-sampling_example-fitted-beta)=
 # ### Examples of different fitted beta distributions
 
 # %% [markdown] user_expressions=[]
@@ -599,17 +605,17 @@ for r,v in rng.uniform([r-s*Δr, v-s*Δv], [r+s*Δr, v+s*Δv], size=(40,2)):
 # stattable.opts(max_rows=len(stattable)+1)
 # stattable.opts(fig_inches=14, aspect=1.8, max_value_len=30, hooks=[clean_table_mpl], backend="matplotlib")
 
-# %% [markdown] user_expressions=[]
+# %% [markdown] user_expressions=[] tags=["remove-cell"]
 # ### Timings for the root solver
 
-# %% [markdown]
+# %% [markdown] tags=["remove-cell"]
 # Reported below are timings for different numbers of fits, comparing a “loop” approach where `get_α_β` is called for each pair `(r, v)`, and a “vectorized” approach where `r` and `v` are passed as vectors.
 #
 # At the moment there is no clear benefit to using the vectorized form; this is likely because it performs the fit in a much higher dimensional space, and it must continue calculations with this large vector until all equations are solved.
 #
 # NB: Timings were done for an older version, where the function returned the $α, β$ parameters rather than a beta random variable. This function also performed vectorized operations by enlarging the fit dimension, rather than the current approach of looping over $(r, v)$ pairs. The observation that this approach was in general no faster than looping partly motivated the change, so we keep these timings results as documentation.
 
-# %% [markdown] tags=["hide-input"]
+# %% [markdown] tags=["remove-cell"]
 # ```python
 # time_results = []
 # for L in tqdm([1, 7, 49, 343]):
@@ -627,7 +633,7 @@ for r,v in rng.uniform([r-s*Δr, v-s*Δv], [r+s*Δr, v+s*Δv], size=(40,2)):
 # time_table.opts(aspect=4, fig_inches=7)
 # ```
 
-# %% [markdown]
+# %% [markdown] tags=["remove-cell"]
 # | # fits |             loop |        vectorized |
 # |-------:|-----------------:|------------------:|
 # |      1 | 555 μs ± 14.2 μs |  515 μs ± 20.2 μs |
@@ -638,7 +644,7 @@ for r,v in rng.uniform([r-s*Δr, v-s*Δv], [r+s*Δr, v+s*Δv], size=(40,2)):
 # %% [markdown] tags=["remove-cell"]
 # The test above samples $r$ from the entire interval $[0, 1]$, but we get similar results when restricting values to the “easy” region $[0.4, 0.6]$. Reducing the values of $v$ (by sampling from a distribution with lighter tail) does bring down the execution time of the vectorized approach. This is consistent with the hypothesis that a few especially difficult $(r,v)$ combinations are slowing down the computations.
 
-# %% [markdown] tags=["hide-input", "remove-cell"]
+# %% [markdown] tags=["remove-cell"]
 # ```python
 # time_results2 = []
 # for L in tqdm([1, 7, 49, 343]):
@@ -663,6 +669,10 @@ for r,v in rng.uniform([r-s*Δr, v-s*Δv], [r+s*Δr, v+s*Δv], size=(40,2)):
 # |      7 | 3.92 ms ± 43.7 μs | 1.65 ms ± 22.9 μs |
 # |     49 |  29.2 ms ± 167 μs | 16.6 ms ± 84.8 μs |
 # |    343 |  214 ms ± 4.27 ms | 1.37 ms ± 6.24 ms |
+
+# %% [markdown]
+# (supp_path-sampling_implementation)=
+# ## Implementation
 
 # %% [markdown]
 # ### Generate a single path
@@ -746,10 +756,10 @@ def generate_path_binary_partition(
 # fig.opts(ylabel="")
 
 # %% [markdown]
-# ## Public interface
-
-# %% [markdown]
 # ### Generate ensemble of sample paths
+#
+# :::{Note} This is the only public function exposed by this module
+# :::
 #
 # To generate $R$ paths, we repeat the following $R$ times:
 # 1. Select start and end points by sampling $\nN(\tilde{Φ}[0], \lnLtt{}[0])$ and $\nN(\tilde{Φ}[-1], \lnLtt{}[-1])$.
@@ -855,7 +865,7 @@ def generate_quantile_paths(R: int, Phi: Array[float,1],
             progbar.update()
 
 # %% [markdown]
-# ### API Test
+# ### Usage example
 
 # %% tags=["active-ipynb"]
 # Φtilde = np.linspace(0.01, 1, 20)

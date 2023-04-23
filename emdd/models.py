@@ -15,6 +15,7 @@
 # ---
 
 # %% [markdown]
+# (code_models)=
 # # Models
 # $\renewcommand{\EE}{\mathbb{E}}
 # \renewcommand{\RR}{\mathbb{R}}
@@ -155,17 +156,11 @@ SeedType = Union[None,int,Tuple[int]]
 #     return x0 + 0.1*width, y0 + 0.9*height
 
 # %% [markdown]
-# :::{Note}
-# The PDF of the natural model is defined on the set of events of random variable $(X,Y)$. For example, if $Ω(X) = \RR$ and $Y = e^X$, we do not define $p(x,y) = p(x)δ(y - e^{x})$, since then the density $p(x,y)$ is either zero or infinite – which does not allow calculating the log likelihood. Instead we restrict ourselves to the 1D manifold $\{(x,y) \in Ω(X \times Y)\} \subset \RR^2$, on which the PDF $p(x,y) = p(x)$ is well behaved.
-#
-# Note also that the restriction to the event set of $(X,Y)$ works whether $Y$ is deterministic or random; in the latter case, $δ(y-g(x))$ is replaced by $p(y|x)$
-# :::
-
-# %% [markdown]
 # :::{NOTE}  
-# All models are defined such that they are hashable, so that functions which take a model as argument can be cached. This is used in by some calibration utility functions to avoid recomputing expensive functions.
-# - ~~*Stochastic models* are hashed according to their identity.~~
-# - ~~*Deterministic models*~~ Models are hashed according to their fields. This allows memoization to occur also between different instances of the same model.
+# All models are defined such that they are hashable, so that functions which take a model as argument can be cached. This is used in by some calibration utility functions to avoid recomputing expensive functions. The hash is computed from the model's fields.
+#
+# Stochastic models should be provided a seed, so that they hash differently.
+# Otherwise, multiple copies of a stochastic model using the default `None` seed will be considered equivalent, even though the output different values.
 #
 # :::
 
@@ -191,7 +186,8 @@ class FullModel:
 
 
 # %% [markdown]
-# ## Independent var models
+# (code_models_indep)=
+# ## Independent variable models
 #
 # Models generating values of the independent variable ($x \in X$ in our notation).
 # Generally expressions are conditioned on $X$, sometimes implicitely.
@@ -337,7 +333,8 @@ class LinspaceX(Model):
 
 
 # %% [markdown]
-# ## Natural models
+# (code_models_phys)=
+# ## Physical models
 #
 # $$X \to Z$$
 
@@ -374,6 +371,7 @@ class DeterministicExpon(Model):
 # hv.Scatter(zip(xarr, MN(xarr)))
 
 # %% [markdown]
+# (code_models_obs)=
 # ## Observation (noise) models
 #
 # $$\begin{alignedat}{2}
@@ -393,15 +391,16 @@ class DeterministicExpon(Model):
 # All distributions are constructed using a variation on the method of moments, using the *second* and higher moments: we invert the closed form expressions for those moments in terms of parameters. We then match the *first* moment by *translation*. For a distribution with unbounded support, this is usually the same as inverting the closed-form expression for the mean, but for distributions with bounded support this results in moving the support, typically so that it contains some negative numbers.
 
 # %% [markdown] user_expressions=[]
-# ### Generative vs inference noise models
+# :::{hint} Generative vs inference observation models
 #
-# For inference,  we restrict ourselves to distributions that have support over $(-\infty, \infty)$. Otherwise, if even a single data point falls outside the support (which is often occurs when the model does not match the data perfectly), the likelihood diverges to $-\infty$, preventing any comparison of models.
+# For inference, we restrict ourselves to distributions that have support over $(-\infty, \infty)$. Otherwise, if even a single data point falls outside the support (which is often occurs when the model does not match the data perfectly), the likelihood diverges to $-\infty$, preventing any comparison of models.
 # When generating synthetic data we do not have this constraint (the model is by definition always exact). This allows generating data using distributions which have support on $(0, \infty)$ for the noise model, such as exponential, Poisson or lognormal distributions.
 #
 # Note that unsupported data samples are only the most salient examples of this issue. More generally, bounded distributions are very sensitive[^safe-bounded] to the location of their upper or lower bound, to the point of making fits unstable. In some cases it may be possible to remedy this by fixing the bound(s), but that constitutes a strong inductive bias which must be warranted.
+# :::
 #
 # :::{admonition} Remark
-# The requirement that inference noise model have support on $\RR$ means that if the true noise model as bounded support, then for any practical inference model there will always be some mismatch between model and data.
+# The requirement that inference noise model have support on $\RR$ means that if the true noise model has bounded support, then for any practical inference model there will always be some mismatch between model and data.
 # :::
 #
 # [^safe-bounded]: This is because there is a sharp decrease in probability density at the bound. Counter examples exist, like unbounded distributions which truncated far into their tails, but are not what one usually intends as bounded distributions.
@@ -892,7 +891,7 @@ class NormInvGaussError(AdditiveRVError):
 # ___
 #
 # :::{caution}
-# The distributions below have bounded support. [As noted above](#generative-vs-inference-noise-models), they should not be use for inference, but can be used to generate synthetic data.
+# The distributions below have bounded support. [As noted above](code_mode_obs), they should not be use for inference, but can be used to generate synthetic data.
 # :::
 #
 # ### Exponential error

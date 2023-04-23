@@ -7,13 +7,14 @@
 #       extension: .py
 #       format_name: light
 #       format_version: '1.5'
-#       jupytext_version: 1.14.1
+#       jupytext_version: 1.14.5
 #   kernelspec:
 #     display_name: Python (EMD-paper)
 #     language: python
 #     name: emd-paper
 # ---
 
+# (supp_emd-implementation)=
 # # EMD implementation
 #
 # $\renewcommand{\RR}{\mathbb{R}}
@@ -25,7 +26,7 @@
 # \renewcommand{\Philt}[2][]{\widetilde{Φ}_{#1|#2}}
 # \renewcommand{\Elmu}[2][1]{μ_{{#2}}^{(#1)}}
 # \renewcommand{\Elsig}[2][1]{Σ_{{#2}}^{(#1)}}
-# \renewcommand{\Bconf}[1][]{B_{\mathrm{conf}#1}}
+# \renewcommand{\Bemd}[1][]{B_{#1}^{\mathrm{EMD}}}
 # $
 
 # + tags=["hide-input"]
@@ -138,7 +139,8 @@ except ModuleNotFoundError:
 
 # -
 
-# ### Path sampler test
+# (supp_emd-implementation_example-sampling-paths)=
+# ## Path sampler test
 #
 # $$\begin{aligned}
 # \tilde{\l} &= \log Φ\,, & Φ &\in [0, 1]\\
@@ -361,7 +363,7 @@ def compute_stats_m1(data: "array_like", logp: Callable,
     return μ1, Σ1
 
 
-# ### Test compute stats
+# ### Test computation of first moment statistics
 #
 # $$\begin{aligned}
 # x &\sim \Unif(0, 3) \\
@@ -397,7 +399,8 @@ def compute_stats_m1(data: "array_like", logp: Callable,
 #                  c=1, N=50, R=100)
 # -
 
-# ## $\Bconf$
+# (supp_emd-implementation_Bemd)=
+# ## Implementation of $\Bemd$
 #
 # **Given**
 #
@@ -410,7 +413,7 @@ def compute_stats_m1(data: "array_like", logp: Callable,
 #
 # **Return**
 #
-# - $\Bconf\bigl(\Elmu{A}, \Elsig{A}, \Elmu{B}, \Elsig{B}\bigr)$, where the moments are given by `compute_stats_m1`.
+# - $\Bemd\bigl(\Elmu{A}, \Elsig{A}, \Elmu{B}, \Elsig{B}\bigr)$, where the moments are given by `compute_stats_m1`.
 
 # +
 def mp_wrapper(f: Callable, *args, out: "mp.queues.Queue", **kwargs):
@@ -573,359 +576,6 @@ def Bemd(data: "array_like",
     
     return 0.5 + 0.5 * erf( (μA-μB)/sqrt(2*(ΣA + ΣB)) )
 
-
-# ## Calibration
-#
-# :::{NOTE}  
-# To make interactive use more responsive, we memoize (cache) the computed statistics for each value of `c`. This despite the fact that calling the function again gives slightly different results, due to the use of random numbers.
-#
-# We anticipate that for most applications, this would be the preferred trade-off, but if completely reproducible results are desired, then the calibration utility functions should probably not be used.  
-# :::
-
-# +
-class Stats(NamedTuple):
-    mean: float
-    std : float
-
-class StatIdx(NamedTuple):
-    hightop: int
-    highbot: int
-    lowtop: int
-    lowbot: int
-
-# To avoid passing uncacheable parameters to `get_estimated_stats`,
-# progbars can be passed as module variables
-dataset_progbar = None
-path_progbar = None
-
-# NB: ignore only works with joblib; it is ignored by lru_cache
-@memoize(ignore=["progbars"])
-def get_estimated_stats(c: float, n_data_sets: int,
-                        data_L: int, theory_L: int, theory_logp: Callable,
-                        true_gen: Callable, theory_gen: Callable,
-                        N: int, R: int, relstderr_tol: float=2e-2,
-                        progbars: Optional[Tuple[tqdm,tqdm]]=(None,None)
-                       ) -> Tuple[float, float, float]:
-    """
-    Return the statistics which would be estimated
-    Returns (low, mean, high)
-    """
-    global dataset_progbar, path_progbar
-    
-    stats = np.zeros((n_data_sets, 2), dtype=float)
-    
-    _dataset_progbar, _path_progbar = progbars
-    if _dataset_progbar is not None:
-        dataset_progbar = tqdm(desc="Generating synthetic data sets", leave=False)
-    if _path_progbar is not None:
-        path_progbar = tqdm(desc="Sampling quantile paths", leave=False)
-        
-    dataset_progbar.reset(total=n_data_sets)
-    path_progbar.reset(total=R)
-    
-    for i in range(n_data_sets):
-        μ1, Σ1 = compute_stats_m1(
-            true_gen(data_L, seed=i), theory_logp, theory_gen(theory_L, seed=i),
-            c=c, N=N, R=R, relstderr_tol=relstderr_tol, path_progbar=path_progbar)
-        stats[i] = μ1, sqrt(Σ1)
-        dataset_progbar.update(1)
-
-    return Stats(mean=stats[:,0], std=stats[:,1])
-
-@memoize
-def get_true_stats(n_data_sets,
-                   L: int, theory_logp: Callable, true_gen: Callable
-                   ) -> Tuple[float, float]:
-    """
-    Estimate the baseline variability of the observed data.
-    Generates multiple data sets and returns the (mean, std) of the
-    expected likelihood over “true” data sets.
-    """
-    true_El_samples = np.fromiter(
-        (theory_logp(true_gen(L, seed=i)).mean() for i in range(n_data_sets)),
-        float, n_data_sets)
-    μ, σ = true_El_samples.mean(), true_El_samples.std()
-    # NB: stderr on the mean is σ / sqrt(N)
-    if n_data_sets < 400:  # Threshold for determining mean determined to within 5% of the std.dev. "tube" width
-        logger.warning("You may want to increase the number of data sets to at least 400;\n"
-                       "for error 5% of tube width: 400 data sets;\n"
-                       "for error 1% of tube width: 10000 data sets.")
-    return Stats(μ, σ)
-
-
-# -
-
-def calibration_plot(c_list: List[float], data_L: int, theory_L: int,
-                     theory_logp: Union[Callable, Dict[tuple, Callable]],
-                     theory_gen : Union[Callable, Dict[tuple, Callable]],
-                     true_gen   : Union[Callable, Dict[tuple, Callable]],
-                     n_true_data_sets=400, n_estimated_data_sets=5,
-                     sampled_path_length=64, R=30, relstderr_tol=2e-2,
-                     *, progbars: Optional[Tuple[tqdm,tqdm,tqdm,tqdm]]=None
-                     ) -> hv.HoloMap:
-    """
-    Run simulated model comparisons with a known true model and different
-    EMD proportionality constants `c`, to determine which value is most
-    appropriate.
-    For best results, other parameters (data distribution, data set size, etc.)
-    should be as close as possible to application conditions.
-    
-    To facilitate interactive use, results are cached, so the function can be
-    re-run with a different `c_list`, and only the new values of `c` will be
-    computed. Note that this only works if all other function parameters are
-    the same.
-    
-    This is essentially a wrapper around `compute_stats_m1`. See also that function
-    for more information on the parameters.
-    
-    Returns a collection of HoloViews plots (a `HoloMap`). To display the
-    result, the calling code should take care of things like selecting a backend.
-    HoloMap keys are all the possible combinations from the keys of
-    `theory_logp`, `theory_gen` and `true_gen`.
-    
-    Parameters
-    ----------
-    c_list: The values of `c` to test.
-    data_L  : Size of the observed data set. This is used to estimate true
-       statistics from synthetic data sets generated with the *true* model.
-       This value should match the size of the actual data against which the
-       models were fitted.
-    theory_L: Size of data sets to use to estimate the quantile function of
-       the *theoretical* model. It is not necessary that this number be the same
-       as the dataset; it should be large enough to estimate the quantile
-       function accurately.
-    theory_logp: Log likelihood function of the *theoretical* model.
-    theory_gen : A function which generates datasets from the *theoretical* model.
-       It must take one argument, the data set size `L`, and return a tuple,
-       `x` and `y` of the independent variable and observations.
-    true_gen   : A function which generates datasets from the *true* model.
-       It must take one argument, the data set size `L`, and return a tuple,
-       `x` and `y` of the independent variable and observations.
-    n_true_data_sets: The number of true data sets to generate to estimate
-       the *true* statistics. For each data set, this just involves evaluating
-       logp – this is normally pretty cheap, so a fairly large number can be used.
-       The default (400) should determine the true mean to within 5%
-       of relative standard error.
-    n_estimated_data_sets: The number of *theoretical* data sets to generate.
-       For each, the full bootstrapped EMD analysis (with `R` sampled paths in logp space)
-       is performed to estimate the variability of the statistics. This is pretty
-       expensive, so a small number (~5) is recommended. We are most interested in
-       the variability of intervals, more than the spread.
-    sampled_path_length: For each path sampled in the EMD analysis, determines
-       the number of stops in Φ.
-    R: Number of paths to sample in the EMD analysis.
-    relstderr_tol: Tolerance for the EMD analysis (see `compute_stats_m1`).
-       This should normally be set to a higher value than would normally be
-       used for `compute_stats_m1`: higher tolerance allows to sample more
-       data sets, to get a better idea of the spread.
-       It also adds noise to the estimate from each data set, but modest
-       noise in this case might actually be beneficial, serving to offset
-       the small number of data sets.
-    progbars: If provided, must be a tuple of three tqdm progress bars:
-       ``(tqdm(desc="Iterating over parameter sets"), tqdm(desc="Iterating over c values"),
-          tqdm(desc="Generating synthetic data sets"), tqdm(desc="Sampling quantile paths"))``
-       This allows the same progress bars to be used in multiple calls to
-       `calibration_plot`. If progress bars are not passed, new ones are created
-       with ``leave=False``, such that they are removed after completion, modulo
-       a few pixels of vertical whitespace. Therefore passing `progbars` is 
-       especially useful when there are multiple calls to `calibration_plot`,
-       to avoid unsightly accumulation of white space.
-       
-    Returns
-    -------
-    HoloMap:
-        Each frame consists of a plot of the variability of the likelihood
-        due to the finite data set. The EMD estimate is plotted against the
-        true spread, for different values of `c`.
-        One frame is produced for each combination of `theory_logp`,
-        `theory_gen` and `true_gen`.
-        
-    Hint
-    ----
-    The hash of a normal Python functions is just its identity. Therefore
-    to ensure caching, it is important that the same functions are reused.
-    In other words, instead of doing
-    
-    .. code:: python
-       from functools import partial
-       from itertools import product
-       for Θdata, Θmodel in product(Θdata_list, Θmodel_list):
-         calibration_plot(..., theory_gen=partial(theory_gen,Θ=Θmodel))
-         
-    do
-    
-    .. code:: python
-       theory_gens = {tuple(Θmodel): partial(theory_gen,Θ=Θmodel)}
-       for Θdata, Θmodel in product(Θdata_list, Θmodel_list):
-         calibration_plot(..., theory_gen=theory_gens[Θmodel])
-    
-    """
-    global dataset_progbar, path_progbar
-    # Normalize inputs: all dicts with tuples as keys
-    if not isinstance(theory_logp, dict):
-        theory_logp = {(): theory_logp}
-    else:
-        theory_logp = {(k,) if not isinstance(k, tuple) else k: v
-                       for k,v in theory_logp.items()}
-    if not isinstance(theory_gen, dict):
-        theory_gen = {(): theory_gen}
-    else:
-        theory_gen = {(k,) if not isinstance(k, tuple) else k: v
-                      for k,v in theory_gen.items()}
-    if not isinstance(true_gen, dict):
-        true_gen = {(): true_gen}
-    else:
-        true_gen = {(k,) if not isinstance(k, tuple) else k: v
-                    for k,v in true_gen.items()}
-        
-    # Construct key dimensions
-    k0 = next(iter(theory_logp))
-    if not all_equal(len(k) for k in theory_logp):
-        raise ValueError("All keys to `theory_logp` must have the same length.")
-    elif k0 == ():
-        logp_keydims = []  # Only one element => no need for a dimension
-    elif len(k0) == 1:
-        logp_keydims = ["logp"]
-    else:
-        logp_keydims = [f"logp{i}" for i in range(len(k0))]
-    k0 = next(iter(theory_gen))
-    if not all_equal(len(k) for k in theory_gen):
-        raise ValueError("All keys to `theory_gen` must have the same length.")
-    elif k0 == ():
-        theory_keydims = []  # Only one element => no need for a dimension
-    elif len(k0) == 1:
-        theory_keydims = ["theory"]
-    else:
-        theory_keydims = [f"theory{i}" for i in range(len(k0))]
-    k0 = next(iter(true_gen))
-    if not all_equal(len(k) for k in true_gen):
-        raise ValueError("All keys to `true_gen` must have the same length.")
-    elif k0 == ():
-        true_keydims = []  # Only one element => no need for a dimension
-    elif len(k0) == 1:
-        true_keydims = ["true"]
-    else:
-        true_keydims = [f"true{i}" for i in range(len(k0))]
-        
-    keydims = logp_keydims + theory_keydims + true_keydims
-        
-    # Set up progress bars
-    if progbars:
-        param_progbar, c_progbar, dataset_progbar, path_progbar = progbars
-    else:
-        param_progbar   = tqdm(desc="Iterating over parameter sets", leave=False)
-        c_progbar       = tqdm(desc="Iterating over c values", leave=False)
-        dataset_progbar = tqdm(desc="Theory data set", leave=False)
-        path_progbar    = tqdm(desc="Sampling quantile paths", leave=False)
-    param_progbar.reset(total=len(theory_logp)*len(theory_gen)*len(true_gen))
-    c_progbar.reset(total=len(c_list))
-    dataset_progbar.reset(total=n_estimated_data_sets)
-    path_progbar.reset(total=R)
-    
-    def c_generator():
-        for c in c_list:
-            yield c
-            c_progbar.update(1)
-        
-    # OK let’s go
-    frames = {}
-    for (logp_key, logp), (theory_key, theory), (true_key, true) \
-        in product(theory_logp.items(), theory_gen.items(), true_gen.items()):
-
-        # Compute true and estimated statistics
-        true_stats = get_true_stats(n_true_data_sets,
-                                    data_L, logp, theory)
-        est_stats = [get_estimated_stats(c, n_estimated_data_sets,
-                                         data_L, theory_L, logp,
-                                         true, theory,
-                                         N=sampled_path_length,
-                                         R=R, relstderr_tol=relstderr_tol,
-                                         progbars=(None, None))  # Pass None to allow caching
-                     for c in c_generator()]
-        
-        # For each value of c, identify which data set generated the highest & lowest logp
-        idcs = [ StatIdx((s := es.mean + es.std).argmax(),
-                         (d := es.mean - es.std).argmax(),
-                         s.argmin(),
-                         d.argmin())
-                 for es in est_stats ]
-        
-        # Construct plot elements
-        #highmean1 = (es.mean[si.hightop] for es, si in zip(est_stats, idcs))
-        #highmean2 = (es.mean[si.highbot] for es, si in zip(est_stats, idcs))
-        #lowmean1  = (es.mean[si.lowtop] for es, si in zip(est_stats, idcs))
-        #lowmean2  = (es.mean[si.lowbot] for es, si in zip(est_stats, idcs))
-        highmean = (es.mean.max() for es, si in zip(est_stats, idcs))
-        lowmean = (es.mean.min() for es, si in zip(est_stats, idcs))
-
-        highspreadtop = (es.mean[si.hightop] + es.std[si.hightop] for es, si in zip(est_stats, idcs))
-        highspreadbot = (es.mean[si.highbot] - es.std[si.highbot] for es, si in zip(est_stats, idcs))
-        lowspreadtop  = (es.mean[si.lowtop]  + es.std[si.lowtop]  for es, si in zip(est_stats, idcs))
-        lowspreadbot  = (es.mean[si.lowbot]  - es.std[si.lowbot]  for es, si in zip(est_stats, idcs))
-
-        true_curve = hv.Curve([(c, true_stats.mean) for c in c_list],
-                             label="True mean", kdims=["c"], vdims=["l"],
-                            ).opts(*true_opts)
-        true_area  = hv.Area([(c, true_stats.mean-true_stats.std, true_stats.mean+true_stats.std)
-                                    for c in c_list],
-                                   label="True std dev", kdims=["c"], vdims=["l", "l_high"],
-                                  ).opts(*true_opts)
-
-        highcurve = hv.Curve([(c, m) for c, m in zip(c_list, highmean)],
-                             kdims=["c"], vdims=["l"], label="Estimated mean (high)"
-                             ).opts(*high_opts)
-        #highcurve2 = hv.Curve([(c, m) for c, m in zip(c_list, highmean2)],
-        #                      kdims=["c"], vdims=["l"], label="Estimated mean (high)"
-        #                      ).opts(*high_opts)
-        lowcurve  = hv.Curve([(c, m) for c, m in zip(c_list, lowmean)],
-                             kdims=["c"], vdims=["l"], label="Estimated mean (low)"
-                             ).opts(*low_opts)
-        #lowcurve2  = hv.Curve([(c, m) for c, m in zip(c_list, lowmean2)],
-        #                      kdims=["c"], vdims=["l"], label="Estimated mean (low)",
-        #                      ).opts(*low_opts)
-
-        higharea   = hv.Area([(c, b, t) for c, b, t in zip(c_list, highspreadbot, highspreadtop)],
-                             kdims=["c"], vdims=["l", "l'"], label="Estimated mean (high)") \
-                             .opts(*high_opts)
-        lowarea    = hv.Area([(c, b, t) for c, b, t in zip(c_list, lowspreadbot, lowspreadtop)],
-                             kdims=["c"], vdims=["l", "l'"], label="Estimated mean (low)") \
-                             .opts(*low_opts)
-        
-        # Combine the plot
-        frame = (true_area * higharea * lowarea
-                 * true_curve * highcurve * lowcurve)
-        frame.opts(fig_inches=3.5, aspect=2., backend="matplotlib") \
-             .opts(legend_position="bottom_left") \
-             .redim.range(l=(true_stats.mean-6*true_stats.std, true_stats.mean+6*true_stats.std))
-        if frames:
-            # We already have a frame: no need to add another legend
-            # (this assumes frames will be placed in a Layout)
-            frame.opts(show_legend=False)
-        
-        # Merge the keys and add to the dict of frames
-        key = logp_key + theory_key + true_key
-        frames[key] = frame
-        
-        # Increment the progress bar by 1
-        param_progbar.update(1)
-        
-    # Remove progress bars from module variables
-    param_progbar = None
-    dataset_progbar = None
-    # Finally, package the dictionary into a HoloMap
-    return hv.HoloMap(frames, kdims=keydims)
-
-# + tags=["active-ipynb"]
-# calibration_plot(
-#     c_list=[0.2, 0.5, 1, 1.6, 4],
-#     data_L=400, theory_L=400,
-#     theory_logp=theory_logp, theory_gen=theory_gen,
-#     true_gen=true_gen) \
-# .redim.range(l=(-1.6,-1.3)) \
-# .opts(legend_position="right") \
-# .opts(fig_inches=6, aspect=2, backend="matplotlib")
-
 # + tags=["remove-input", "active-ipynb"]
 # from emdd.utils import GitSHA
 # GitSHA()
-#
