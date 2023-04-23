@@ -1,4 +1,7 @@
 # -*- coding: utf-8 -*-
+# %%
+from __future__ import annotations
+
 # %% [markdown]
 # # Tasks
 #
@@ -16,7 +19,7 @@ import multiprocessing as mp
 import numpy as np
 from functools import partial
 from itertools import repeat
-from typing import Union, Dict, Tuple, List, Iterable
+from typing import Union, Dict, Tuple, List, Iterable, NamedTuple
 from dataclasses import dataclass, is_dataclass, replace
 from scityping import Serializable, Dataclass, Type
 from tqdm.auto import tqdm
@@ -31,6 +34,9 @@ from smttask.workflows import ParamColl, SeedGenerator
 from emdd import Bemd
 from emdd.models import Model, FullModel
 
+# %%
+__all__ = ["SeedGen", "ModelColl", "Calibrate", "CalibrateKey", "CalibrateOutput"]
+
 
 # %%
 class SeedGen(SeedGenerator):
@@ -44,8 +50,8 @@ class SeedGen(SeedGenerator):
 # Since our models are just dataclasses with additional methods, they can also double as parameter collections (we just ignore the methods).
 
 # %%
-# Types needed ParamColl
-from smttask.workflows import Literal, NOSEED, Seed, Union, Dimension, Dict, List
+# Types needed by ParamColl
+#from smttask.workflows import Literal, NOSEED, Seed, Union, Dimension, Dict, List
 
 @dataclass(frozen=True)
 class ModelColl(ParamColl, FullModel):
@@ -169,15 +175,6 @@ def compute_Bemd(models_c, Ldata, Ltheo, seeds):
     
     assert not any((hasattr(Mtrue.phys, "random_state"), hasattr(MA.phys, "random_state"), hasattr(MB.phys, "random_state"))), \
         "In order to support stochastic physical models, we need to update `logp_theo` (and do some testing)."
-        
-    # (Θtrue, ΘA, ΘB), c = Θtup_c
-    # Mptrue = Mptrue(**Θptrue, seed=seeds.Mptrue(Θptrue.phys))
-    # Metrue = Metrue(**Θetrue, seed=seeds.Metrue(Θetrue.obs))
-
-    # MpA = Mptheo(**ΘA.phys, seed=seeds.MA(θA.phys))
-    # MeA = Metheo(**ΘA.obs , seed=seeds.MA(θA.obs))
-    # MpB = Mptheo(**ΘB.phys, seed=seeds.MB(ΘB.phys))
-    # MeB = Metheo(**ΘB.obs , seed=seeds.MB(ΘB.obs))
 
     # Likelihood functions for models A and B.
     # If we want priors, they should be included here
@@ -215,9 +212,6 @@ def compute_Bconf(MX, Mtrue, MA, MB, Linf, seeds):
     MX = update_random_state(MX, seeds.MX(MX))
     Mtrue_phys = update_random_state(Mtrue.phys, seeds.Mtrue("phys", Mtrue))
     Mtrue_obs  = update_random_state(Mtrue.obs , seeds.Mtrue("obs" , Mtrue))
-    # Θtrue, ΘA, ΘB = Θtup
-    # Mptrue = Mptrue(**Θptrue, seed=seeds.Mptrue(Θptrue.phys))
-    # Metrue = Metrue(**Θetrue, seed=seeds.Metrue(Θetrue.obs))
 
     # Likelihood functions for models A and B.
     # If we want priors, they should be included within the model's `logpdf`
@@ -233,14 +227,66 @@ def compute_Bconf(MX, Mtrue, MA, MB, Linf, seeds):
 
 
 # %% [markdown]
-# ### Calibration task
-
-# %% [markdown]
+# ### Input and output types
+#
 # Types: Since we use dataclasses to define all our models, we can use `scityping`'s built-in support for simple dataclasses to avoid having to define any additional serializable types.
 # For extra self-documentation, we could define base clases for `Model` from which all our models would derive, and use those as type annotations.
 
+# %%
+EntropyVal = Union[int,str]  # In general, any type accepted by smttask.workflows._normalize_entropy should work
+class CalibrateOutput(TaskOutput):
+    Bemd : List[float]
+    Bconf: List[float]
+
+CalibrateKey = Tuple[Model,ModelColl,ModelColl,ModelColl]  # MX, MTrue, MA, MB – Note that the latter three are hierarchical, hence the ModelColl type
+BemdResult   = Dict[Tuple[CalibrateKey, float], float]
+BconfResult  = Dict[CalibrateKey, float]
+class UnpackedCalibrateResult(NamedTuple):
+    Bemd : BemdResult
+    Bconf: BconfResult
+
+
 # %% [markdown]
-# ## Task parameters
+# ### Task definition
+
+# %%
+@RecordedTask
+class Calibrate:
+    pass
+
+
+# %% [markdown]
+# #### Model generators
+#
+# These yield the randomly generated models in a determininistic sequence. In addition to being used within the task itself, these methods can also be used to recreate the sequence of models, avoiding the need to save them with the output.
+#
+# The additional arguments to `models_c_gen` could eventually be used for a incremental task, which would allow increasing `N` and only computing the new values. At present this is not supported, so it is always safe to pass empty dictionaries:  
+# `task.models_c_gen(Bemd_results={}, Bconf_results={})`.
+
+    # %%
+    def models_gen(self):
+        "Return an iterator over models."
+        return zip(repeat(self.taskinputs.MX),
+                   self.taskinputs.Mtrue_coll.inner(self.taskinputs.N),
+                   self.taskinputs.MtheoA_coll.inner(self.taskinputs.N),
+                   self.taskinputs.MtheoB_coll.inner(self.taskinputs.N))
+    
+    def models_c_gen(self, Bemd_results: "dict|set", Bconf_results: "dict|set"):
+        """Return an iterator over models and c values.
+        The two additional arguments `Bemd_results` and `Bconf_results` should be sets of
+        *already computed* results. At the moment this is mostly a leftover from a previous
+        implementation, before this function was made a *Task* — in the current 
+        implementation, the task always behaves as though empty dictionaries were passed.
+        """
+        for models in self.models_gen():
+            for c in self.taskinputs.c_list:
+                if (models, c) not in Bemd_results:  # Skip results which are
+                    yield (models, c)                # already loaded
+                else:
+                    assert models in Bconf_results
+
+# %% [markdown]
+# #### Task parameters
 #
 # | Parameter | Value | Description |
 # |-----------|---------|-------------|
@@ -250,7 +296,7 @@ def compute_Bconf(MX, Mtrue, MA, MB, Linf, seeds):
 # | `c_list` | [{glue:text}`c_list`]  | The values of $c$ we want to test. |
 # | `ncores` | # physical cores | Number of CPU cores to use. |
 #
-# ### Effects on compute time
+# ##### Effects on compute time
 #
 # The total number of experiments will be
 # $$N \times \lvert\mathtt{c\_list}\rvert \times \text{(\# parameter set distributions)} \,.$$
@@ -258,7 +304,7 @@ def compute_Bconf(MX, Mtrue, MA, MB, Linf, seeds):
 #
 # Results are cached on-disk with [joblib.Memory](https://joblib.readthedocs.io/en/latest/memory.html), so this notebook can be reexecuted without re-running the experiments. Loading from disk takes about 1 minute for 6000 experiments.
 #
-# ### Effects on caching
+# ##### Effects on caching
 #
 # Like any RecordedTask, `Calibrate` will record its output to disk. If executed again with exactly the same parameters, instead of evaluating the task again, the result is simply loaded from disk.
 #
@@ -266,117 +312,108 @@ def compute_Bconf(MX, Mtrue, MA, MB, Linf, seeds):
 #
 # Changing any argument other than `c_list` will invalidate all caches and force all recomputations.
 
-# %%
-#ModelColl = ParamColl
-CalibrateKey = Tuple[Model,ModelColl,ModelColl,ModelColl]  # MX, MTrue, MA, MB – Note that the latter three are hierarchical, hence the ModelColl type
-EntropyVal = Union[int,str]  # In general, any type accepted by smttask.workflows._normalize_entropy should work
-# ModelColl = ParamColl[Model]  # One day perhaps ParamColl will support this
-
-class CalibrateOutput(TaskOutput):
-    # NB: Conceptually these are dicts, but JSONEncoder doesn’t support tuples as dict keys
-    Bemd : List[Tuple[Tuple[CalibrateKey, float], float]]
-    Bconf: List[Tuple[CalibrateKey, float]]
-
-
-# %%
-@RecordedTask
-def Calibrate(
-    MX         : Model,
-    Mtrue_coll : ModelColl,
-    MtheoA_coll: ModelColl,
-    MtheoB_coll: ModelColl,
-    # Θcoll_true : ParamColl,
-    # Θcoll_theoA: ParamColl,
-    # Θcoll_theoB: ParamColl,
-    c_list     : List[float],
-    N          : int,
-    Ldata      : int,
-    Ltheo      : int,
-    Linf       : int,
-    entropy    : Union[EntropyVal,Tuple[EntropyVal,...]]
-    ) -> CalibrateOutput:
-    """
-    Parameters
-    ----------
-    N: Number of different parameter sets to try when computing Bemd.
-    Ldata: Number of data points from the true model to generate when computing Bemd.
-        This should be chosen commensurate with the data will analyze, in order
-        to accurately mimic data variability.
-    Ltheo: Number of data points from the theoretical model to generate when computing `Bemd`.
-        This does not need to be the same as `Ldata`, and should be large enough
-        to make numerical errors negligible.
-    Linf: Number of data points from the true model to generate when computing `Bconf`.
-        This is to emulate an infinitely large data set, and so should be large
-        enough that numerical variability is completely suppressed. The computational
-        cost of `Bconf` is miniscule compare do `Bemd`, so taking very large
-        values of `Linf` – on the order of 10^6 or more – is recommended.
-    """
-    pass
-
+    # %%
+    def __call__(
+        self,
+        MX         : Model,
+        Mtrue_coll : ModelColl,
+        MtheoA_coll: ModelColl,
+        MtheoB_coll: ModelColl,
+        c_list     : List[float],
+        N          : int,
+        Ldata      : int,
+        Ltheo      : int,
+        Linf       : int,
+        entropy    : Union[EntropyVal,Tuple[EntropyVal,...]]
+        ) -> CalibrateOutput:
+        """
+        Parameters
+        ----------
+        N: Number of different parameter sets to try when computing Bemd.
+        Ldata: Number of data points from the true model to generate when computing Bemd.
+            This should be chosen commensurate with the data will analyze, in order
+            to accurately mimic data variability.
+        Ltheo: Number of data points from the theoretical model to generate when computing `Bemd`.
+            This does not need to be the same as `Ldata`, and should be large enough
+            to make numerical errors negligible.
+        Linf: Number of data points from the true model to generate when computing `Bconf`.
+            This is to emulate an infinitely large data set, and so should be large
+            enough that numerical variability is completely suppressed. The computational
+            cost of `Bconf` is miniscule compare do `Bemd`, so taking very large
+            values of `Linf` – on the order of 10^6 or more – is recommended.
+        """
+        pass
 
 # %% [markdown]
 # Convert `entropy` to the object that will generate all of our seeds.
 
-    # %%
-    seeds = SeedGen(entropy)
+        # %%
+        seeds = SeedGen(entropy)
 
 # %% [markdown]
 # Bind arguments to the `Bemd` function, so it only take one argument (`models`) – this is required by `imap`.
 
-    # %%
-    compute_Bemd_partial = partial(compute_Bemd,
-           Ldata=Ldata, Ltheo=Ltheo, seeds=SeedGen((entropy, "Bemd")))
+        # %%
+        compute_Bemd_partial = partial(compute_Bemd,
+               Ldata=Ldata, Ltheo=Ltheo, seeds=SeedGen((entropy, "Bemd")))
 
 # %% [markdown]
 # Define dictionaries into which we will accumulate the results of the $B^{\mathrm{EMD}}$ and $B_{\mathrm{conf}}$ calculations.
 
-    # %%
-    Bemd_results = {}
-    Bconf_results = {}
+        # %%
+        Bemd_results = {}
+        Bconf_results = {}
 
 # %% [markdown]
 # - Set the iterator over parameter combinations (we need two identical ones)
 # - Set up progress bar.
 # - Determine the number of multiprocessing cores we will use.
 
-    # %%
-    modelgen1 = zip(repeat(MX), Mtrue_coll.inner(N), MtheoA_coll.inner(N), MtheoB_coll.inner(N))
-    modelgen2 = zip(repeat(MX), Mtrue_coll.inner(N), MtheoA_coll.inner(N), MtheoB_coll.inner(N))
-    total = N*len(c_list)
-    progbar = tqdm(desc="Calib. experiments", total=total)
-    ncores = psutil.cpu_count(logical=False)
-    ncores = min(ncores, total, config.mp.max_cores)
+        # %%
+        total = N*len(c_list)
+        progbar = tqdm(desc="Calib. experiments", total=total)
+        ncores = psutil.cpu_count(logical=False)
+        ncores = min(ncores, total, config.mp.max_cores)
 
 # %% [markdown]
 # Run the experiments. Since there are a lot of them, and they each take a few minutes, we use multiprocessing to do this in reasonable time.  
 
-    # %%
-    with mp.Pool(ncores) as pool:
-        # Chunk size calculated following Pool's algorithm (See https://stackoverflow.com/questions/53751050/multiprocessing-understanding-logic-behind-chunksize/54813527#54813527)
-        # (Naive approach would be total/ncores. This is most efficient if all taskels take the same time. Smaller chunks == more flexible job allocation, but more overhead)
-        chunksize, extra = divmod(N, ncores*6)
-        def models_c_gen(modelgen: Iterable, c_list):
-            for models in modelgen:
-                for c in c_list:
-                    if (models, c) not in Bemd_results:  # Skip results which are
-                        yield (models, c)                # already loaded
-                    else:
-                        assert models in Bconf_results
-        if extra:
-            chunksize += 1
-        Bemd_it = pool.imap(compute_Bemd_partial, models_c_gen(modelgen1, c_list),
-                            chunksize=chunksize)
-        for (models, c), Bemd_res in zip(models_c_gen(modelgen2, c_list), Bemd_it):  # NB: This will always yield the same
-            progbar.update(1)        # Updating first more reliable w/ ssh           #  tuples as modelgen1, because we only
-            Bemd_results[models, c] = Bemd_res                                       #  update the dict after drawing from modelgen2
-            Bconf_results[models] = compute_Bconf(*models, Linf, seeds=SeedGen((entropy, "Bconf")))
+        # %%
+        with mp.Pool(ncores) as pool:
+            # Chunk size calculated following Pool's algorithm (See https://stackoverflow.com/questions/53751050/multiprocessing-understanding-logic-behind-chunksize/54813527#54813527)
+            # (Naive approach would be total/ncores. This is most efficient if all taskels take the same time. Smaller chunks == more flexible job allocation, but more overhead)
+            chunksize, extra = divmod(N, ncores*6)
+            if extra:
+                chunksize += 1
+            Bemd_it = pool.imap(compute_Bemd_partial,
+                                self.models_c_gen(Bemd_results, Bconf_results),
+                                chunksize=chunksize)
+            for (models, c), Bemd_res in zip(                                     # NB: Both `models_c_gen` generators
+                    self.models_c_gen(Bemd_results, Bconf_results),               # always yield the same tuples,
+                    Bemd_it):                                                     # because we only update Bemd_results
+                progbar.update(1)        # Updating first more reliable w/ ssh    # after drawing from the second generator
+                Bemd_results[models, c] = Bemd_res
+                if models not in Bconf_results:
+                    Bconf_results[models] = compute_Bconf(*models, Linf, seeds=SeedGen((entropy, "Bconf")))
 
-    progbar.close()
+        progbar.close()
 
 # %% [markdown]
-# Return the results
-# Serialization does not support tuples for the dict keys (only str, int, float, bytes), so we convert the dicts to lists
+# #### Result format
+#
+# If we serialize the whole dict, most of the space is taken up by serializing keys. Not only is this wasteful – we can easily recreate them with `models_c_gen` – but it also makes deserializing the results quite slow.
+# So instead we return just the values as a list, and provide an `unpack_result` method which reconstructs the result dictionary.
+
+        # %%
+        return dict(Bemd =list(Bemd_results.values()),
+                    Bconf=list(Bconf_results.values()))
 
     # %%
-    return dict(Bemd =list(Bemd_results.items()),
-                Bconf=list(Bconf_results.items()))
+    def unpack_result(self, result: Calibrate.Outputs.result_type
+                     ) -> UnpackedCalibrateResult:
+        return UnpackedCalibrateResult(
+            Bemd  = dict(zip(self.models_c_gen({},{}),
+                             result.Bemd)),
+            Bconf = dict(zip(self.models_gen(),
+                             result.Bconf))
+        )
