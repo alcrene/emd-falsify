@@ -5,9 +5,11 @@ from typing import Optional, ClassVar, Union, Literal
 from configparser import ConfigParser
 
 from pydantic import BaseModel, Field, validator, root_validator
-from mackelab_toolbox.config import ValidatingConfig, prepend_rootdir, ensure_dir_exists
-from mackelab_toolbox.config.holoviews import FiguresConfig
+# from mackelab_toolbox.config import ValidatingConfig, prepend_rootdir, ensure_dir_exists
+# from mackelab_toolbox.config.holoviews import FiguresConfig
     # prepend_rootdir is a workaround because assigning automatically doesn’t currently work
+from valconfig import ValConfig, ensure_dir_exists
+from valconfig.contrib.holoviews import FiguresConfig
 from scityping import Config as ScitypingConfig
 
 # Possible improvement: If we could have nested config parsers, we might be 
@@ -16,27 +18,21 @@ from scityping import Config as ScitypingConfig
 #     In particular, the `colors` field could remain a config parser, although
 #     we would still want to allow dotted access.
 
-class Config(ValidatingConfig):
-    default_config_file : ClassVar = Path(__file__).parent/"defaults.cfg"
-    config_module_name  : ClassVar = __name__
-
-    package_name = "emdd"
+class Config(ValConfig):
+    __default_config_path__   = "defaults.cfg"
 
     class paths:
         projectdir : Path
-        configdir  : Path="config"
-        # smtproject : Path
-        # datadir    : Path
-        # labnotesdir: Path
+        # configdir  : Path="config"
         figuresdir : Path
 
         # _prepend_rootdir = prepend_rootdir("figuresdir")
 
         # _ensure_dir_exists = ensure_dir_exists("figuresdir")
         
-        _prepend_rootdir = validator("figuresdir",
-                                     allow_reuse=True
-                                    )(prepend_rootdir)
+        # _prepend_rootdir = validator("figuresdir",
+        #                              allow_reuse=True
+        #                             )(prepend_rootdir)
         _ensure_dir_exists = validator("figuresdir", allow_reuse=True
                                       )(ensure_dir_exists)
 
@@ -68,7 +64,7 @@ class Config(ValidatingConfig):
             mmap_mode: Optional[str]=None
             compress: Union[bool,int]=False
 
-            _prepend_rootdir = validator("location", allow_reuse=True)(prepend_rootdir)
+            # _prepend_rootdir = validator("location", allow_reuse=True)(prepend_rootdir)
 
             # We could comment this out, since although pickled data are not machine portable, since the hash/filename is computed
             # from the pickle, if another machine tries to load to load from the same location, it should be OK.
