@@ -36,6 +36,7 @@
 import logging
 import warnings
 import math
+import time
 #import multiprocessing as mp
 import numpy as np
 from scipy.special import digamma, polygamma
@@ -863,6 +864,7 @@ def generate_quantile_paths(R: int, Phi: Array[float,1],
             progbar.put(total)
         elif progbar is not None:
             progbar.update()
+            time.sleep(0.05)  # Without a small wait, the progbar might not update
 
 # %% [markdown]
 # ### Usage example

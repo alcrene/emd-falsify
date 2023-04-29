@@ -143,7 +143,7 @@ def format_scientific(a: Union[int,float], sig_digits=3, tex=False) -> str:
         s = f"{sgn}{i}.{f}"
     else:
         if tex:
-            s = f"{sgn}{i}.{f} \\times 10^{{{make_int_superscript(p)}}}"
+            s = f"{sgn}{i}.{f} \\times 10^{{{p}}}"
         else:
             s = f"{sgn}{i}.{f}×10{make_int_superscript(p)}"
 
