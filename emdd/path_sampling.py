@@ -9,7 +9,7 @@
 #       format_name: percent
 #       format_version: '1.3'
 #   kernelspec:
-#     display_name: Python (EMD-paper)
+#     display_name: Python (emd-paper)
 #     language: python
 #     name: emd-paper
 # ---
@@ -18,19 +18,26 @@
 # (supp_path-sampling)=
 # # Sampling quantile paths
 
-# %% [markdown]
-# $\renewcommand{\lnLtt}{\tilde{l}}
-# \renewcommand{\lnLh}[1][]{\hat{l}_{#1}}
-# \renewcommand{\EE}{\mathbb{E}}
-# \renewcommand{\VV}{\mathbb{V}}
-# \renewcommand{\nN}{\mathcal N}
-# \renewcommand{\emdstd}[1][]{\tilde{σ}_{{#1}}}
-# \renewcommand{\emdstd}[1][]{{\mathrm{EMD}}_{#1}}
-# \renewcommand{\Mvar}{\mathop{\mathrm{Mvar}}}
-# \renewcommand{\EMD}[1][]{{\mathrm{EMD}}_{#1}}
-# \renewcommand{\Beta}{\mathop{\mathrm{Beta}}}
-# \renewcommand{\pathP}{\mathop{\mathcal{P}}}
-# $
+# %% [markdown] user_expressions=[]
+# ```{only} html
+# {{ prolog }}
+# %{{ startpreamble }}
+# %{{ endpreamble }}
+# ```
+
+# %% [markdown] tags=["remove-cell"]
+#     $\renewcommand{\lnLtt}{\tilde{l}}
+#     \renewcommand{\lnLh}[1][]{\hat{l}_{#1}}
+#     \renewcommand{\EE}{\mathbb{E}}
+#     \renewcommand{\VV}{\mathbb{V}}
+#     \renewcommand{\nN}{\mathcal N}
+#     \renewcommand{\emdstd}[1][]{\tilde{σ}_{{#1}}}
+#     %\renewcommand{\emdstd}[1][]{{\mathrm{EMD}}_{#1}}
+#     \renewcommand{\Mvar}{\mathop{\mathrm{Mvar}}}
+#     \renewcommand{\EMD}[1][]{{\mathrm{EMD}}_{#1}}
+#     \renewcommand{\Beta}{\mathop{\mathrm{Beta}}}
+#     \renewcommand{\pathP}{\mathop{\mathcal{P}}}
+#     $
 
 # %% tags=["hide-input"]
 import logging
@@ -112,23 +119,27 @@ logger = logging.getLogger(__name__)
 # (supp_path-sampling_conditions-beta-param)=
 # ### Conditions for choosing the beta parameters
 #
-# To draw an increment $Δ l_{2^{-n}}$, we need to convert $\lnLtt(Φ)$ and $\emdstd(Φ)$ (obtained from the model discrepancy analysis) into beta distribution parameters $α$ and $β$. If $x_1$ follows a beta distribution, then its first two cumulants are given by
+# :::{margin}
+# Recall that in {numref}`sec_integrating-Me`, we made the assumption that the variability of the path process $\pathP$ should determined by $\EMD$, up to some constant $c$. This constant is determined by a calibration experiment.
+# To keep expressions concise, in this section we use $\emdstd(Φ) := c \EMD(Φ)$.
+# :::
+# To draw an increment $Δ l_{2^{-n}}$, we need to convert $\lnLtt(Φ)$ and $\emdstd(Φ) := c \EMD(Φ)$ into beta distribution parameters $α$ and $β$. If $x_1$ follows a beta distribution, then its first two cumulants are given by
 # $$\begin{aligned}
 # x_1 &\sim \Beta(α, β) \,, \\
 # \EE[x_1] &= \frac{α}{α+β} \,, \\
 # \VV[x_1] &= \frac{αβ}{(α+β)^2(α+β+1)} \,. \\
 # \end{aligned}$$
-# However, as discussed by Mateu-Figueras et al. (2021, 2011), to properly account for the geometry of a simplex, one should consider instead statistics of with respect to the Aitchison measure, sometimes referred to as the *center* and *metric variance*. Defining $x_2 = 1-x_1$, these can be written (Mateu-Figueras et al., 2021)
+# However, as discussed by Mateu-Figueras et al. (2021, 2011), to properly account for the geometry of a simplex, one should consider instead statistics with respect to the Aitchison measure, sometimes referred to as the *center* and *metric variance*. Defining $x_2 = 1-x_1$, these can be written (Mateu-Figueras et al., 2021)
 # $$\begin{align}
 # \EE_a[(x_1, x_2)] &= \frac{1}{e^{ψ(α)} + e^{ψ(β)}} \bigl[e^{ψ(α)}, e^{ψ(β)}\bigr] \,, \label{eq_Aitchison-moments__EE} \\
 # \Mvar[(x_1, x_2)] &= \frac{1}{2} \bigl(ψ_1(α) + ψ_1(β)\bigr) \,. \label{eq_Aitchison-moments__Mvar}
 # \end{align}$$ (eq_Aitchison-moments)
 # Here $ψ$ and $ψ_1$ are the digamma and trigamma functions respectively.
-# (In addition to ontological considerations, it is much more straightforward to define a consistent stochastic process using the center and metric variance. For example, since the metric variance is unbounded, we can easily scale it with $\emdstd(Φ)$.)
+# (In addition to being more appropriate, the center and metric variance are also better suited for defining a consistent stochastic process. For example, since the metric variance is unbounded, we can always scale it with $\emdstd(Φ)$ without exceeding its domain.)
 
 # %% [markdown] user_expressions=[]
 # Since we want the sum to be $d := \lnLh(Φ+2^{-n+1}) - \lnLh(Φ)$, we define
-# $$\bigl[Δ l_{2^{-n}}\bigl(Φ\bigr),\, Δ l_{2^{-n}}\bigl(Φ+2^{-n})\bigr)\bigr] = d \cdot \bigl[x_1, x_2\bigr] \,.$$  (eq_relation-beta-increment)
+# $$\bigl[Δ l_{2^{-n}}\bigl(Φ\bigr),\, Δ l_{2^{-n}}\bigl(Φ+2^{-n})\bigr)\bigr] = d \bigl[x_1, x_2\bigr] \,.$$  (eq_relation-beta-increment)
 # Then
 
 # %% [markdown] user_expressions=[]
@@ -139,24 +150,19 @@ logger = logging.getLogger(__name__)
 
 # %% [markdown] user_expressions=[]
 # We now choose to define the parameters $α$ and $β$ via the following relations:
+# :::{admonition}
+# :class: important
+#
 # $$\begin{aligned}
-# \EE_a\Bigl[\bigl[Δ l_{2^{-n}}\bigl(Φ\bigr),\, Δ l_{2^{-n}}\bigl(Φ+2^{-n}\bigr)\bigr]\Bigr] &=^* \bigl[\, \lnLtt\bigl(Φ+2^{-n}\bigr) - \lnLtt\bigl(Φ\bigr),\,\lnLtt\bigl(Φ+2^{-n+1}\bigr) - \lnLtt\bigl(Φ+2^{-n}\bigr) \,\bigr]\,, \\
+# \EE_a\Bigl[\bigl[Δ l_{2^{-n}}\bigl(Φ\bigr),\, Δ l_{2^{-n}}\bigl(Φ+2^{-n}\bigr)\bigr]\Bigr] &\stackrel{!}{=}^* \bigl[\, \lnLtt\bigl(Φ+2^{-n}\bigr) - \lnLtt\bigl(Φ\bigr),\,\lnLtt\bigl(Φ+2^{-n+1}\bigr) - \lnLtt\bigl(Φ+2^{-n}\bigr) \,\bigr]\,, \\
 # \Mvar\Bigl[\bigl[Δ l_{2^{-n}}\bigl(Φ\bigr),\, Δ l_{2^{-n}}\bigl(Φ+2^{-n}\bigr)\bigr]\Bigr] &\stackrel{!}{=} \emdstd\bigl(Φ+2^{-n}\bigr)^2 \,.
 # \end{aligned}$$ (eq_defining-conditions-a)
+# :::
 
 # %% [markdown] user_expressions=[]
-# These follow from interpretating $\lnLtt$ and $\emdstd$ as estimators for the mean and square root of the metric variance.
+# These follow from interpretating $\lnLtt$ and $\emdstd$ as estimators for the center and square root of the metric variance.
 # We use $=^*$ to indicate equality in spirit rather than true equality, since strictly speaking, these are 3 equations for 2 unknown. To reduce the $\EE_a$ equations to one, we use instead
 # $$\frac{\EE_a\bigl[Δ l_{2^{-n}}\bigl(Φ\bigr)\bigr]}{\EE_a \bigl[Δ l_{2^{-n}}\bigl(Φ+2^{-n}\bigr)\bigr]} \stackrel{!}{=} \frac{\lnLtt\bigl(Φ+2^{-n}\bigr) - \lnLtt\bigl(Φ\bigr)}{\lnLtt\bigl(Φ+2^{-n+1}\bigr) - \lnLtt\bigl(Φ+2^{-n}\bigr)} \,.$$ (eq_defining_conditions-b)
-
-# %% [markdown] tags=["remove-cell"] user_expressions=[]
-# ---
-#
-# TO REMOVE: I originally put a $2^{-n}$ coefficient in front of $\Mvar$. I don't think it's warranted anymore, since we already scale with $d$.
-#
-# In the second, the scaling proportional to the step size ensures that as increments get smaller, the variance also decreases. More specifically, that $\Mvar\Bigl[\bigl[Δ l_{2^{-n+1}}\bigl(Φ\bigr),\, Δ l_{2^{-n+1}}\bigl(Φ+2^{-n+1})\bigr)\bigr]\Bigr] \approx 2\,\Mvar\Bigl[\bigl[Δ l_{2^{-n}}\bigl(Φ\bigr),\, Δ l_{2^{-n}}\bigl(Φ+2^{-n})\bigr)\bigr]\Bigr]$.
-#
-# ---
 
 # %% [markdown] user_expressions=[]
 # **Remarks**
@@ -175,10 +181,14 @@ logger = logging.getLogger(__name__)
 
 # %% [markdown] user_expressions=[]
 # Define
+# :::{admonition}
+# :class: important
+#
 # $$\begin{align}
 # r &:= \frac{\lnLtt(Φ+2^{-n}) - \lnLtt(Φ)}{\lnLtt(Φ+2^{-n+1}) - \lnLtt(Φ+2^{-n})} \,; \\
-# v &:= \frac{1}{2} \emdstd\bigl(Φ + 2^{-n}\bigr)^2 \,.
+# v &:= 2 \emdstd\bigl(Φ + 2^{-n}\bigr)^2 \,.
 # \end{align}$$ (eq_def-r-v_supp) 
+# :::
 # (Definitions repeated from Eqs. \labelcref{eq_def-r-v__r,eq_def-r-v__v}.) The first value, $r$, is the ratio of two subincrements within $Δ l_{2^{-n+1}}(Φ)$.
 # Setting $\frac{e^{ψ(α)}}{e^{ψ(β)}} = r$, the two equations we need to solve for $α$ and $β$ can be written
 # $$\begin{align}
@@ -186,11 +196,6 @@ logger = logging.getLogger(__name__)
 # \ln\bigl[ ψ_1(α) + ψ_1(β) \bigr] &= \ln v \,.
 # \end{align}$$ (eq_root-finding-problem_supp)
 # (Definitions repeated from Eqs. \labelcref{eq_root-finding-problem__r,eq_root-finding-problem__v}.) Note that these equations are symmetric in $Φ$: replacing $Φ$ by $-Φ$ simply changes the sign on both sides of the first. The use of the logarithm in the equation for $v$ helps to stabilize the numerics.
-
-# %% [markdown] tags=["remove-cell"] user_expressions=[]
-# :::{margin}
-# ~~To allow solving for multiple $α$, $β$ simultaneously, we solve for a flat vector $\left(\begin{smallmatrix}α\\β\end{smallmatrix}\right)$. Despite the much higher-dimensional space, this reliable enough for our use.~~
-# :::
 
 # %%
 def f(lnαβ, lnr_v, _array=np.array, _exp=np.exp, digamma=digamma, polygamma=polygamma):
@@ -459,7 +464,7 @@ def _draw_from_beta_scalar(r: Real, v: Real, rng: RNGenerator, n_samples: int=1,
         return rng.beta(α, β, size=size)
     
     # Finally, if `size` was passed, ensure result has the right shape
-    # NB: We only reach this point if we want through one of the 3 first special cases
+    # NB: We only reach this point if we go through one of the 3 first special cases
     if size:
         return np.array(special_val)[...,None].repeat(n_samples, axis=-1)
     else:
@@ -471,13 +476,11 @@ def draw_from_beta(r: Union[Real,Array[float,1]],
                    n_samples: int=1
                   ) -> Tuple[float]:
     """
-    Return α, β for a beta distribution with an metric variance `v` and center
+    Return α, β for a beta distribution with a metric variance `v` and center
     biased by `r`. More precisely, `r` is the ratio of the lengths ``c`` and
     ``1-c``, where ``c`` is the center.
     
     `r` and `v` may either be scalars or arrays
-    
-    FIXME: Special cases not vectorized
     """
     rng = np.random.default_rng(rng)  # No-op if `rng` is already a Generator
     
@@ -689,19 +692,17 @@ def generate_path_binary_partition(
     Returned path has length ``2**res + 1``.
     If `ltilde` and`sigmatilde` have a different length, they are linearly-
     interpolated to align with the returned array `Φhat`.
-    Typical values of `res` are 6, 7 and 8, corresponding to paths of length
-    64, 128 and 256. Smaller values may be useful to accelerate debugging. Larger values
-    increase the computation cost with (typically) negligible improvements in accuracy.
     
     Parameters
     ----------
     Phi: Values of Φ at which `ltilde` and `sigmatilde` are evaluated.
-    ltilde: Vector of means for the Gaussian process.
-    sigmatilde: Vector of standard deviations for the Gaussian process.
+    ltilde: Best guess for true likelihood path. The generated path will
+       be centered on this trace.
+    sigmatilde: Vector of scaled EMD values. (I.e. {math}`c \mathrm{EMD}`.)
     res: Returned paths have length ``2**res``.
        Typical values of `res` are 6, 7 and 8, corresponding to paths of length
-       64, 128 and 256. Smaller may be useful to accelerate debugging, but larger
-       values are unlikely to be useful.
+       64, 128 and 256. Smaller may be useful to accelerate debugging. Larger values
+       increase the computation cost with typically negligible improvements in accuracy.
     seed: Any argument accepted by `numpy.random.default_rng` to initialize an RNG.
     
     Returns
@@ -736,7 +737,7 @@ def generate_path_binary_partition(
         i = np.arange(Δi, N, 2*Δi)  # Indices for the new values to insert
         d = lhat[i+Δi] - lhat[i-Δi] # Each pair of increments must sum to `d`
         r = (ltilde[i] - ltilde[i-Δi]) / (ltilde[i+Δi]-ltilde[i])  # Ratio of first/second increments
-        v = 0.5*sigma2tilde[i]
+        v = 2*sigma2tilde[i]
         x1 = draw_from_beta(r, v, rng=rng)
         lhat[i] = lhat[i-Δi] + d * x1
     return Φhat, lhat
@@ -793,8 +794,9 @@ def generate_quantile_paths(R: int, Phi: Array[float,1],
     ----------
     R: Number of paths to generate.
     Phi: Values of Φ at which `ltilde` and `sigmatilde` are evaluated.
-    ltilde: Vector of means for the Gaussian process.
-    sigmatilde: Vector of standard deviations for the Gaussian process.
+    ltilde: Best guess for true likelihood path. The generated path will
+       be centered on this trace.
+    sigmatilde: Vector of scaled EMD values. (I.e. {math}`c \mathrm{EMD}`.)
     res: Returned paths have length ``2**res + 1``.
        Typical values of `res` are 6, 7 and 8, corresponding to paths of length
        64, 128 and 256. Smaller may be useful to accelerate debugging, but larger
