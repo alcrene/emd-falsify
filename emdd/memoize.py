@@ -14,6 +14,7 @@
 # This helps keep memoization transparent: it should be used when possible, but not prevent the use of otherwise valid functions.
 
 import logging
+import textwrap
 from collections.abc import Callable
 from functools import partial, update_wrapper, WRAPPER_ASSIGNMENTS
 from inspect import unwrap
@@ -112,7 +113,9 @@ def nofail_functools_cache(warn: bool=True):
                     if warn:
                         logger.warning(f"Calling unmemoized form of {cached_f.__name__} "
                                        "because some arguments are unhashable. "
-                                       "To avoid log spam, this message will not be repeated.")
+                                       "To avoid log spam, this message will not be repeated. "
+                                       "The original error message was:\n"
+                                       + textwrap.indent(str(e), "  "))
                         warn = False
                     return f(*args, **kwds)
         update_wrapper(wrapper, cached_f,
@@ -139,7 +142,9 @@ if joblib:
                     logger.warning(f"Calling unmemoized form of {self.__qualname__} "
                                    "because some arguments cannot be pickled:\n"
                                    f"{e.args[0]}\n"  # args[1] can be very long and drown the log message
-                                   "To avoid log spam, this message will not be repeated.")
+                                   "To avoid log spam, this message will not be repeated. "
+                                   "The original error message was:\n"
+                                   + textwrap.indent(str(e), "  "))
                     self.warn = False
                 return self.func(*args, **kwargs)
         def check_call_in_cache(self, *args, **kwargs):
