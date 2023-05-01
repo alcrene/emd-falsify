@@ -102,8 +102,6 @@ def format_scientific(a: Union[int,float], sig_digits=3, tex=False) -> str:
     """
     Format a number in scientific notation, with the requested number of
     significant digits.
-
-    :param:tex: If True, format the result as a TeX string enclosed with `$`.
     """
     # First deal with the sign, since log10 requires strictly positive values
     if a < 0:
@@ -117,9 +115,9 @@ def format_scientific(a: Union[int,float], sig_digits=3, tex=False) -> str:
     ## vvv EARLY EXITS vvv ##
     if not math.isfinite(a):
         if a == math.inf:
-            return "$\\infty$" if tex else "∞"
+            return "\\infty" if tex else "∞"
         elif a == -math.inf:
-            return "-$\\infty$" if tex else "-∞"
+            return "-\\infty" if tex else "-∞"
         else:
             return str(a)
     ## ^^^ EARLY EXITS ^^^ ##
@@ -147,7 +145,7 @@ def format_scientific(a: Union[int,float], sig_digits=3, tex=False) -> str:
         else:
             s = f"{sgn}{i}.{f}×10{make_int_superscript(p)}"
 
-    return f"${s}$" if tex else s
+    return s
 
 # ### Test
 

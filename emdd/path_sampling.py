@@ -25,19 +25,18 @@
 # %{{ endpreamble }}
 # ```
 
-# %% [markdown] tags=["remove-cell"]
-#     $\renewcommand{\lnLtt}{\tilde{l}}
-#     \renewcommand{\lnLh}[1][]{\hat{l}_{#1}}
-#     \renewcommand{\EE}{\mathbb{E}}
-#     \renewcommand{\VV}{\mathbb{V}}
-#     \renewcommand{\nN}{\mathcal N}
-#     \renewcommand{\emdstd}[1][]{\tilde{σ}_{{#1}}}
-#     %\renewcommand{\emdstd}[1][]{{\mathrm{EMD}}_{#1}}
-#     \renewcommand{\Mvar}{\mathop{\mathrm{Mvar}}}
-#     \renewcommand{\EMD}[1][]{{\mathrm{EMD}}_{#1}}
-#     \renewcommand{\Beta}{\mathop{\mathrm{Beta}}}
-#     \renewcommand{\pathP}{\mathop{\mathcal{P}}}
-#     $
+# %% [markdown] user_expressions=[]
+# $\renewcommand{\lnLtt}{\tilde{l}}
+# \renewcommand{\lnLh}[1][]{\hat{l}_{#1}}
+# \renewcommand{\EE}{\mathbb{E}}
+# \renewcommand{\VV}{\mathbb{V}}
+# \renewcommand{\nN}{\mathcal N}
+# \renewcommand{\emdstd}[1][]{\tilde{σ}_{{#1}}}
+# \renewcommand{\Mvar}{\mathop{\mathrm{Mvar}}}
+# \renewcommand{\EMD}[1][]{{\mathrm{EMD}}_{#1}}
+# \renewcommand{\Beta}{\mathop{\mathrm{Beta}}}
+# \renewcommand{\pathP}{\mathop{\mathcal{P}}}
+# $
 
 # %% tags=["hide-input"]
 import logging
@@ -310,7 +309,7 @@ def f_mid(lnα, v, _exp=np.exp, polygamma=polygamma):
 # For extreme values of $r$ or $v$, the beta distribution becomes degenerate and numerical optimization may break. We identify four cases requiring special treatment.
 #
 # :::::{div} full-width
-# ::::{grid}
+# ::::{grid} 1 2 3 4
 # :gutter: 3
 #
 # :::{grid-item-card}
