@@ -15,28 +15,37 @@
 # ---
 
 # %% [markdown]
+# ---
+# math:
+#   '\lnLtt': '{\tilde{l}}'
+#   '\EE'   : '{\mathbb{E}}'
+#   '\VV'   : '{\mathbb{V}}'
+#   '\nN'   : '{\mathcal{N}}'
+#   '\Mvar' : '{\mathop{\mathrm{Mvar}}}'
+#   '\Beta' : '{\mathop{\mathrm{Beta}}}'
+#   '\pathP': '{\mathop{\mathcal{P}}}'
+# ---
+#
+# $\renewcommand{\lnLh}[1][]{\hat{l}_{#1}}
+# \renewcommand{\emdstd}[1][]{\tilde{σ}_{{#1}}}
+# \renewcommand{\EMD}[1][]{{\mathrm{EMD}}_{#1}}$
+
+# %% [markdown]
 # (supp_path-sampling)=
 # # Sampling quantile paths
 
-# %% [markdown] user_expressions=[]
+# %% [markdown]
 # ```{only} html
 # {{ prolog }}
 # %{{ startpreamble }}
 # %{{ endpreamble }}
 # ```
 
-# %% [markdown] user_expressions=[]
-# $\renewcommand{\lnLtt}{\tilde{l}}
-# \renewcommand{\lnLh}[1][]{\hat{l}_{#1}}
-# \renewcommand{\EE}{\mathbb{E}}
-# \renewcommand{\VV}{\mathbb{V}}
-# \renewcommand{\nN}{\mathcal N}
-# \renewcommand{\emdstd}[1][]{\tilde{σ}_{{#1}}}
-# \renewcommand{\Mvar}{\mathop{\mathrm{Mvar}}}
-# \renewcommand{\EMD}[1][]{{\mathrm{EMD}}_{#1}}
-# \renewcommand{\Beta}{\mathop{\mathrm{Beta}}}
-# \renewcommand{\pathP}{\mathop{\mathcal{P}}}
-# $
+# %% tags=["active-ipynb", "remove-cell"]
+# # import jax
+# # import jax.numpy as jnp
+# # from functools import partial
+# # jax.config.update("jax_enable_x64", True)
 
 # %% tags=["hide-input"]
 import logging
@@ -45,8 +54,10 @@ import math
 import time
 #import multiprocessing as mp
 import numpy as np
-from scipy.special import digamma, polygamma
-from scipy.optimize import root, brentq
+import scipy.special
+import scipy.optimize
+#from scipy.special import digamma, polygamma
+#from scipy.optimize import root, brentq
 from tqdm.auto import tqdm
 
 from typing import Optional, Union, Literal, Tuple, Generator
@@ -55,7 +66,7 @@ from scityping.numpy import Array, Generator as RNGenerator
 
 from emdd.digitize import digitize  # Used to improve numerical stability when finding Beta parameters
 
-# %% [markdown] tags=["remove-cell"] user_expressions=[]
+# %% [markdown] tags=["remove-cell"]
 # Notebook-only imports
 
 # %% tags=["active-ipynb", "hide-input"]
@@ -73,7 +84,7 @@ from emdd.digitize import digitize  # Used to improve numerical stability when f
 logger = logging.getLogger(__name__)
 
 
-# %% [markdown] user_expressions=[]
+# %% [markdown]
 # We want to generate paths $\lnLh$ for the quantile function $l(Φ)$, with $Φ \in [0, 1]$, from a stochastic process $\pathP$ determined by $\lnLtt(Φ)$ and $\emdstd(Φ)$. This process must satisfy the following requirements:
 # - It must generate only monotone paths, since quantile functions are monotone.
 # - The process must be heteroscedastic, with variability at $Φ$ given by $\emdstd(Φ)$.
@@ -82,11 +93,11 @@ logger = logging.getLogger(__name__)
 #   + In particular, we want to avoid defining a stochastic process which starts at one point and accumulates variance, like the $\sqrt{t}$ envelope characteristic of a Gaussian white noise.
 #   + Concretely, we require the process to be “$Φ$-symmetric”: replacing $\lnLtt(Φ) \to \lnLtt(-Φ)$ and $\emdstd(Φ) \to \emdstd(-Φ)$ should define the same process, just inverted along the $Φ$ axis.
 
-# %% [markdown] user_expressions=[]
+# %% [markdown]
 # (supp_path-sampling_hierarchical-beta)=
 # ## Hierarchical beta process
 
-# %% [markdown] user_expressions=[]
+# %% [markdown]
 # Because the joint requirements of monotonicity, non-stationarity and $Φ$-symmetry are uncommon for a stochastic process, some care is required to define an appropriate $\pathP$. The approach we choose here is to first select the end points $\lnLh(0)$ and $\lnLh(1)$, then fill the interval by successive binary partitions: first $\bigl\{\lnLh\bigl(\tfrac{1}{2}\bigl)\bigr\}$, then $\bigl\{\lnLh\bigl(\tfrac{1}{4}\bigr), \lnLh\bigl(\tfrac{3}{4}\bigr)\bigr\}$, $\bigl\{\lnLh\bigl(\tfrac{1}{8}\bigr), \lnLh\bigl(\tfrac{3}{8}\bigr), \lnLh\bigl(\tfrac{5}{8}\bigr), \lnLh\bigl(\tfrac{7}{8}\bigr)\bigr\}$, etc. (Below we will denote these ensembles $\{\lnLh\}^{(1)}$, $\{\lnLh\}^{(2)}$, $\{\lnLh\}^{(3)}$, etc.) Thus integrating over paths becomes akin to a path integral with variable end points.
 # Moreover, instead of drawing quantile values, we draw increments
 # $$Δ l_{ΔΦ}(Φ) := \lnLh(Φ+ΔΦ) - \lnLh(Φ) \,.$$ (eq_def-quantile-increment)
@@ -100,7 +111,7 @@ logger = logging.getLogger(__name__)
 # $$p(x_1) \propto x^{α-1} (1-x)^{β-1}\,,$$ (eq_beta-pdf)
 # with $α$ and $β$ parameters to be determined.
 
-# %% [markdown] user_expressions=[]
+# %% [markdown]
 # :::{IMPORTANT}  
 # An essential property of a stochastic process is *consistency*: it must not matter exactly how we discretize the interval {cite:p}`gillespieMathematicsBrownianMotion1996`. Let $\{\lnLh\}^{(n)}$ denote the steps which are added when we refine the discretization from steps of $2^{-n+1}$ to steps of $2^{-n}$:
 # $$\{\lnLh\}^{(n)} := \bigl\{\lnLh(k\cdot 2^{-n}) \,\big|\, k=1,3,\dotsc,2^n \bigr\} \,.$$ (eq_added-steps)
@@ -111,10 +122,10 @@ logger = logging.getLogger(__name__)
 # We have found that failure to satisfy this requirement leads to unsatisfactory sampling of quantile paths. In particular, naive procedures tend to perform worse as $ΔΦ$ is reduced, making accurate integration impossible.
 # :::
 
-# %% [markdown] user_expressions=[]
+# %% [markdown]
 # [^1]: One could conceivably draw all increments at once, with a [*shifted scaled Dirichlet distribution*](https://doi.org/10.1007/978-3-030-71175-7_4) instead of a beta, if it can be shown that also in this case coarsening the distribution still results in the same probability law.
 
-# %% [markdown] user_expressions=[]
+# %% [markdown]
 # (supp_path-sampling_conditions-beta-param)=
 # ### Conditions for choosing the beta parameters
 #
@@ -136,18 +147,18 @@ logger = logging.getLogger(__name__)
 # Here $ψ$ and $ψ_1$ are the digamma and trigamma functions respectively.
 # (In addition to being more appropriate, the center and metric variance are also better suited for defining a consistent stochastic process. For example, since the metric variance is unbounded, we can always scale it with $\emdstd(Φ)$ without exceeding its domain.)
 
-# %% [markdown] user_expressions=[]
+# %% [markdown]
 # Since we want the sum to be $d := \lnLh(Φ+2^{-n+1}) - \lnLh(Φ)$, we define
 # $$\bigl[Δ l_{2^{-n}}\bigl(Φ\bigr),\, Δ l_{2^{-n}}\bigl(Φ+2^{-n})\bigr)\bigr] = d \bigl[x_1, x_2\bigr] \,.$$  (eq_relation-beta-increment)
 # Then
 
-# %% [markdown] user_expressions=[]
+# %% [markdown]
 # $$\begin{aligned}
 # \EE_a\Bigl[\bigl[Δ l_{2^{-n}}\bigl(Φ\bigr),\, Δ l_{2^{-n}}\bigl(Φ+2^{-n}\bigr)\bigr]\Bigr] &= \frac{d}{e^{ψ(α)} + e^{ψ(β)}} \bigl[e^{ψ(α)}, e^{ψ(β)}\bigr] \,, \\
 # \Mvar\Bigl[\bigl[Δ l_{2^{-n}}\bigl(Φ\bigr),\, Δ l_{2^{-n}}\bigl(Φ+2^{-n}\bigr)\bigr]\Bigr] &= \frac{1}{2} \bigl(ψ_1(α) + ψ_1(β)\bigr) \,.
 # \end{aligned}$$
 
-# %% [markdown] user_expressions=[]
+# %% [markdown]
 # We now choose to define the parameters $α$ and $β$ via the following relations:
 # :::{admonition}
 # :class: important
@@ -158,12 +169,12 @@ logger = logging.getLogger(__name__)
 # \end{aligned}$$ (eq_defining-conditions-a)
 # :::
 
-# %% [markdown] user_expressions=[]
+# %% [markdown]
 # These follow from interpretating $\lnLtt$ and $\emdstd$ as estimators for the center and square root of the metric variance.
 # We use $=^*$ to indicate equality in spirit rather than true equality, since strictly speaking, these are 3 equations for 2 unknown. To reduce the $\EE_a$ equations to one, we use instead
 # $$\frac{\EE_a\bigl[Δ l_{2^{-n}}\bigl(Φ\bigr)\bigr]}{\EE_a \bigl[Δ l_{2^{-n}}\bigl(Φ+2^{-n}\bigr)\bigr]} \stackrel{!}{=} \frac{\lnLtt\bigl(Φ+2^{-n}\bigr) - \lnLtt\bigl(Φ\bigr)}{\lnLtt\bigl(Φ+2^{-n+1}\bigr) - \lnLtt\bigl(Φ+2^{-n}\bigr)} \,.$$ (eq_defining_conditions-b)
 
-# %% [markdown] user_expressions=[]
+# %% [markdown]
 # **Remarks**
 # - We satisfy the necessary condition for consistency by construction:
 #   $$p\bigl(\{l\}^{(n)}\bigr)\bigr) = \int p\bigl(\{l\}^{(n)} \,\big|\, \{l\}^{(n+1)}\bigr) \,d\{l\}^{(n+1)}\,.$$
@@ -174,11 +185,11 @@ logger = logging.getLogger(__name__)
 # - Our defining equations make equivalent use of the pre ($Δ l_{2^{-n}}(Φ)$) and post ($Δ l_{2^{-n}}(Φ+2^{-n})$) increments, thus preserving symmetry in $Φ$.
 # - Step sizes of the form $2^{-n}$ have exact representations in binary. Thus even small step sizes should not introduce additional numerical errors.
 
-# %% [markdown] user_expressions=[]
+# %% [markdown]
 # (supp_path-sampling_beta-param-algorithm)=
 # ### Formulation of the parameter equations as a root-finding problem
 
-# %% [markdown] user_expressions=[]
+# %% [markdown]
 # Define
 # :::{admonition}
 # :class: important
@@ -197,20 +208,37 @@ logger = logging.getLogger(__name__)
 # (Definitions repeated from Eqs. \labelcref{eq_root-finding-problem__r,eq_root-finding-problem__v}.) Note that these equations are symmetric in $Φ$: replacing $Φ$ by $-Φ$ simply changes the sign on both sides of the first. The use of the logarithm in the equation for $v$ helps to stabilize the numerics.
 
 # %%
-def f(lnαβ, lnr_v, _array=np.array, _exp=np.exp, digamma=digamma, polygamma=polygamma):
+def f(lnαβ, lnr_v, _array=np.array, _exp=np.exp, _log=np.log,
+      digamma=scipy.special.digamma, polygamma=scipy.special.polygamma):
     α, β = _exp(lnαβ).reshape(2, -1)  # scipy's `root` always flattens inputs
     lnr, v = lnr_v
     return _array((
         digamma(α) - digamma(β) - lnr,
-        np.log(polygamma(1, α) + polygamma(1, β)) - np.log(v)
+        _log(polygamma(1, α) + polygamma(1, β)) - _log(v)
     )).flat
 
-def f_mid(lnα, v, _exp=np.exp, polygamma=polygamma):
+def f_mid(lnα, v, _exp=np.exp, _log=np.log, polygamma=scipy.special.polygamma):
     "1-d equation, for the special case α=β (equiv to r=1)"
-    return np.log(2*polygamma(1, _exp(lnα))) - np.log(v)
+    return _log(2*polygamma(1, _exp(lnα))) - _log(v)
 
 
-# %% [markdown] user_expressions=[]
+# %% tags=["active-ipynb", "remove-cell"]
+# # #@partial(jax.jit, static_argnames=("_array", "_exp", "_log", "digamma", "polygamma"))
+# # def f(lnαβ, lnr_v, _array=jnp.array, _exp=jnp.exp, _log=jnp.log,
+# #       digamma=jax.scipy.special.digamma, polygamma=jax.scipy.special.polygamma):
+# #     α, β = _exp(lnαβ).reshape(2, -1)  # scipy's `root` always flattens inputs
+# #     lnr, v = lnr_v
+# #     return _array((
+# #         digamma(α) - digamma(β) - lnr,
+# #         _log(polygamma(1, α) + polygamma(1, β)) - _log(v)
+# #     )).flatten()
+#
+# # #@partial(jax.jit, static_argnames=("_exp", "_log", "polygamma"))
+# # def f_mid(lnα, v, _exp=jnp.exp, _log=jnp.log, polygamma=jax.scipy.special.polygamma):
+# #     "1-d equation, for the special case α=β (equiv to r=1)"
+# #     return _log(2*polygamma(1, _exp(lnα))) - _log(v)
+
+# %% [markdown]
 # :::{margin}  
 # This implementation of the Jacobian is tested for both scalar and vector inputs, but fits turned out to be both faster and more numerically stable when they don't use it.
 # Therefore we keep it only for reference and illustration purposes.  
@@ -224,7 +252,7 @@ def f_mid(lnα, v, _exp=np.exp, polygamma=polygamma):
 #                      [np.diagflat(polygamma(1,α)*lnα), np.diagflat(polygamma(1,β)*lnβ)]])
 #     return j
 
-# %% [markdown] user_expressions=[]
+# %% [markdown]
 # The functions $ψ$ and $ψ_1$ diverge at zero, so $α$ and $β$ should remain positive. Therefore it makes sense to fit their logarithm: this enforces the lower bound, and improves the resolution where the derivative is highest. The two objective functions (up to scalar shift) are plotted below: the region for low $\ln α$ and $\ln β$ shows sharp variation around $α=β$, suggesting that this area may be most challenging for a numerical optimizer. In practice this is indeed what we observed.
 #
 # We found however that we can make fits much more reliable by first choosing a suitable initialization point along the $\ln α = \ln β$ diagonal. In practice this means setting $α_0 = α = β$ and solving the 1d problem of Eq. \labelcref{eq_root-finding-problem__v} for $α_0$. (We use the implementation of Brent’s method in SciPy.) Then we can solve the full 2d problem of Eqs. \labelcref{eq_root-finding-problem__r,eq_root-finding-problem__v}, with $(α_0, α_0)$ as initial value. This procedure was successful for all values of $r$ and $v$ we encountered in our experiments.
@@ -232,6 +260,7 @@ def f_mid(lnα, v, _exp=np.exp, polygamma=polygamma):
 # %% tags=["active-ipynb", "hide-input"]
 # α = np.logspace(-2, 1.2)
 # β = np.logspace(-2, 1.2).reshape(-1, 1)
+# digamma, polygamma = scipy.special.digamma, scipy.special.polygamma
 #
 # EEa = digamma(α) / (digamma(α) + digamma(β))
 # Mvar = 0.5*(polygamma(1, α) + polygamma(1, β))
@@ -266,14 +295,14 @@ def f_mid(lnα, v, _exp=np.exp, polygamma=polygamma):
 # hv.save(fig, path.with_suffix(".svg"), backend="matplotlib")
 # hv.save(fig, path.with_suffix(".pdf"), backend="matplotlib")
 
-# %% [markdown] user_expressions=[]
+# %% [markdown]
 # :::{figure} ../figures/path-sampling_polygamma.svg
 # :name: fig_polygamma
 #
 # Characterization of the digamma ($ψ$) and trigamma ($ψ_1$) functions, and of the metric variance $\Mvar$.  
 # :::
 
-# %% [markdown] user_expressions=[]
+# %% [markdown]
 # Plotting the eigenvalues of the Jacobian (specifically, the real part of its dominant eigenvalue) in fact highlights three regions with a center at roughly $(\ln α, \ln β) = (0, 0)$. (The Jacobian does not depend on $r$ or $v$, so this is true for all fit conditions). Empirically we found that initializing fits at $(0, 0)$ resulted in robust fits for a large number of $(r,v)$ tuples, even when $r > 100$. We hypothesize that this is because it is difficult for the fit to move from one region to another; by initializing where the Jacobian is small, fits are able to find the desired values before getting stuck in the wrong region.
 #
 # Note that the color scale is clipped, to better resolve values near zero. Eigenvalues quickly increase by multiple orders of magnitude away from $(0,0)$.
@@ -293,7 +322,7 @@ def f_mid(lnα, v, _exp=np.exp, polygamma=polygamma):
 # hv.save(fig, path.with_suffix(".svg"), backend="matplotlib")
 # hv.save(fig, path.with_suffix(".pdf"), backend="matplotlib")
 
-# %% [markdown] user_expressions=[]
+# %% [markdown]
 # :::{figure} ../figures/path-sampling_jac-spectrum.svg
 # :name: fig_Jac-spectrum
 #
@@ -302,7 +331,7 @@ def f_mid(lnα, v, _exp=np.exp, polygamma=polygamma):
 # In most cases, a root finding algorithm initialized at (0,0) will find a solution.
 # :::
 
-# %% [markdown] user_expressions=[]
+# %% [markdown]
 # (supp_path-sampling_beta-param-special-cases)=
 # ### Special cases for extreme values
 #
@@ -398,21 +427,42 @@ def f_mid(lnα, v, _exp=np.exp, polygamma=polygamma):
 #     # if 0.25 < r < 4:
 #     #     # Special case for r ≈ 1: improve initialization by first solving r=1 <=> α=β
 #     # Improve initialization by first solving r=1 <=> α=β
-#     x0 = brentq(f_mid, -5, 20, args=(v,))
+#     x0 = scipy.optimize.brentq(f_mid, -5, 20, args=(v,))
 #     x0 = (x0, x0)
 #     # else:
 #     #     # Normal case: Initialize fit at (α, β) = (1, 1)
 #     #     x0 = (0, 0)
-#     res = root(f, x0, args=[math.log(r), v])
+#     res = scipy.optimize.root(f, x0, args=[math.log(r), v])
 #     if not res.success:
 #         logger.error("Failed to determine α & β parameters for beta distribution. "
 #                      f"Conditions were:\n  {r=}\n{v=}")
 #     α, β = np.exp(res.x)
 #     return scipy.stats.beta(α, β)
 
+# %% tags=["remove-cell", "active-ipynb"]
+# # import jaxopt
+#
+# # @partial(jax.jit, static_argnums=(0,))
+# # def jaxopt_bisection_solver(f, a, b, args):  # Signature is compatible with scipy.optimize.brentq
+# #     bisec = jaxopt.Bisection(f, -5, 20, check_bracket=False, jit=True)
+# #     return bisec.run(None, *args).params
+#     
+# # #@partial(jax.jit, static_argnames=("fun", "x0", "args", "method"))
+# # def jaxopt_mvroot_solver(fun, x0, args, method):  # Signature is compatible with scipy.optimize.root
+# #     rootsolver = jaxopt.ScipyRootFinding(method=method, optimality_fun=fun, jit=True)
+# #     res = rootsolver.run(x0, args)
+# #     return res.params, res.state.success
+
+# %%
+def scipy_mvroot_solver(fun, x0, args, method, root=scipy.optimize.root):
+    res = root(fun, x0, args, method)
+    return res.x, res.success
+
+
 # %% tags=["hide-input"]
 def _draw_from_beta_scalar(r: Real, v: Real, rng: RNGenerator, n_samples: int=1,
-                           *, _log=math.log, _exp=np.exp, _shape=np.shape
+                           *, _log=math.log, _exp=np.exp, _shape=np.shape,
+                           bracketed_solver=scipy.optimize.brentq, mvroot_solver=scipy_mvroot_solver
                           ) -> Tuple[float]:
     rng = np.random.default_rng(rng)  # No-op if `rng` is already a Generator
     size = None if n_samples == 1 else (*_shape(r), n_samples)
@@ -448,18 +498,19 @@ def _draw_from_beta_scalar(r: Real, v: Real, rng: RNGenerator, n_samples: int=1,
         # (The limits where the normal case fails are around (r=1/3, v=1e4) and (r=3, v=1e4)
         # NB: The values -5 and 20 are slightly beyond the special case limits 5e-8 < v < 1e4 set above;
         #     since also the trigamma function is monotone, this should always find a solution.
-        x0 = brentq(f_mid, -5, 20, args=(v,))
+        x0 = bracketed_solver(f_mid, -5, 20, args=(v,))
+        
         x0 = (x0, x0)
         # else:
         #     # Normal case: Initialize fit at log(α, β) = (1, 1)
         #     x0 = (0., 0.)
-        res = root(f, x0, args=[_log(r), v])
+        x, success = mvroot_solver(f, x0, args=[_log(r), v], method="hybr")
         try:
-            assert res.success
+            assert success
         except AssertionError:
             logger.error("Failed to determine α & β parameters for beta distribution. "
                          f"Conditions were:\n  {r=}\n  {v=}")
-        α, β = _exp(res.x)
+        α, β = _exp(x)
         return rng.beta(α, β, size=size)
     
     # Finally, if `size` was passed, ensure result has the right shape
@@ -490,11 +541,96 @@ def draw_from_beta(r: Union[Real,Array[float,1]],
         return _draw_from_beta_scalar(r, v, rng, n_samples)
 
 
-# %% [markdown] user_expressions=[]
+# %% tags=["hide-input", "active-ipynb", "remove-cell"]
+# # # We can’t jit because ScipyRootFinding.run (in the normal branch) is not jittable
+# # #@partial(jax.jit, static_argnames=("n_samples", "_log", "_exp", "_shape"))
+# # def _draw_from_beta_scalar_jax(r: Real, v: Real, rng: Array, n_samples: int=1,
+# #                                *, _log=jnp.log, _exp=jnp.exp, _shape=jnp.shape,
+# #                           ) -> Tuple[float]:
+# # #    rng = np.random.default_rng(rng)  # No-op if `rng` is already a Generator
+# #     size = None if n_samples == 1 else (*_shape(r), n_samples)
+# #     outshape = size or ()
+# #     rng, subkey = jax.random.split(rng)
+# #     # Special cases for extreme values of r
+#     
+# #     branch_idx = jnp.select(
+# #         [r == 0,      # special val 1 
+# #          r > 1e12,    # special val 0
+# #          v < 1e-8,    # special val 1 / (1+r)
+# #          v > 1e4  ],  # Replace beta by a Bernoulli distribution
+# #         jnp.arange(4),
+# #         default=4     # Normal branch
+# #     )
+# #     #x = jax.lax.switch(                              # What we actually want to use, but requires traceable _normal_branch (it automatically calls jit on its args)
+# #     x = (lambda i, flst, *args: flst[i](*args))(      # Workaround: does not automatically call jit, but also isn’t traceable (so vmap will break here)
+# #         branch_idx,
+# #         [ lambda r,v,size,subkey: jnp.array(1)      [...,None].repeat(n_samples, axis=-1).reshape(outshape),
+# #           lambda r,v,size,subkey: jnp.array(0)      [...,None].repeat(n_samples, axis=-1).reshape(outshape),
+# #           lambda r,v,size,subkey: jnp.array(1/(1+r))[...,None].repeat(n_samples, axis=-1).reshape(outshape),
+# #           lambda r,v,size,subkey: jax.random.bernoulli(subkey, 1/(r+1), shape=size).astype(float),
+# #           _normal_branch_beta                                                                ],
+# #         r, v, size, subkey  # operands
+# #     )
+# #     return rng, x
+#
+# # def _normal_branch_beta(r, v, size, subkey,
+# #                         beta=jax.random.beta, _exp=jnp.exp, _log=jnp.log,
+# #                         bracketed_solver=jaxopt_bisection_solver,
+# #                         #mvroot_solver=jaxopt_mvroot_solver
+# #                         mvroot_solver=scipy_mvroot_solver
+# #                        ):
+# #     # First find a better initialization by solving for the 1d case
+# #     # where r=1 and therefore α=β.
+# #     # (The limits where the normal case fails are around (r=1/3, v=1e4) and (r=3, v=1e4)
+# #     # NB: The values -5 and 20 are slightly beyond the special case limits 5e-8 < v < 1e4 set above;
+# #     #     since also the trigamma function is monotone, this should always find a solution.
+# #     x0 = bracketed_solver(f_mid, -5, 20, args=(v,))
+# #     x0 = jnp.tile(x0, (2,))  # Convert x0 to (x0, x0)
+# #     x, success = mvroot_solver(f, x0, args=[_log(r), v], method="hybr")
+# #     try:
+# #         assert success
+# #     except AssertionError:
+# #         logger.error("Failed to determine α & β parameters for beta distribution. "
+# #                      f"Conditions were:\n  {r=}\n  {v=}")
+# #     α, β = _exp(x)
+# #     return beta(subkey, α, β, shape=size)
+
+# %% tags=["active-ipynb", "remove-cell"]
+# # # Does not work: _draw_from_beta_scalar_jax needs to be traceable
+# # _draw_from_beta_scalar_jax_vectorized = jax.vmap(_draw_from_beta_scalar_jax, [0, 0, 0, None], 0)
+#
+# # def draw_from_beta_jax(r: Union[Real,Array[float,1]],
+# #                        v: Union[Real,Array[float,1]],
+# #                        rng: Array[np.uint32],
+# #                        n_samples: int=1
+# #                       ) -> Tuple[float]:
+# #     """
+# #     Return α, β for a beta distribution with a metric variance `v` and center
+# #     biased by `r`. More precisely, `r` is the ratio of the lengths ``c`` and
+# #     ``1-c``, where ``c`` is the center.
+#     
+# #     `r` and `v` may either be scalars or arrays
+# #     """
+#     
+#     
+# #     if hasattr(r, "__iter__"):
+# #         rngkeys = jax.random.split(rng, len(r) + 1)
+# #         rng = rngkeys[0]
+# #         x = _draw_from_beta_scalar_jax_vectorized(r, v, rngkeys[1:], n_samples)
+# #     else:
+# #         rng, subkey = jax.random.split(rng)
+# #         x = _draw_from_beta_scalar_jax(r, v, subkey, n_samples)
+# #     return rng, x
+
+# %% tags=["remove-cell", "active-ipynb"]
+# # # Does not work: _draw_from_beta_scalar_jax needs to be traceable
+# # draw_from_beta_jax(jnp.array([1., 2., 3.]), jnp.array([1., 2., 3.]), key, 4)
+
+# %% [markdown]
 # (supp_path-sampling_example-fitted-beta)=
 # ### Examples of different fitted beta distributions
 
-# %% [markdown] user_expressions=[]
+# %% [markdown]
 # Plotted below are the beta distributions for different values of $r$ and $v$.
 
 # %% tags=["active-ipynb", "hide-input", "full-width"]
@@ -552,19 +688,18 @@ def draw_from_beta(r: Union[Real,Array[float,1]],
 # dists.opts(width=500, backend="bokeh")
 # dists.opts(fig_inches=7, aspect=2.5, legend_cols=2, backend="matplotlib")
 
-# %% [markdown] tags=["remove-cell", "skip-execution"] user_expressions=[]
+# %% [markdown] tags=["remove-cell", "skip-execution"]
 # Extra test, for a point that is especially sensitive to numerical issues: despite the very tight distribution, only 10-25% points raise a warning.
 
-# %% tags=["remove-cell", "skip-execution"]
-r=2.2691824192512438;    Δr = 0.000000000000001
-v=6.79406184644904e-08;  Δv = 1e-22
-s=2
-rng = np.random.default_rng(45)
-for r,v in rng.uniform([r-s*Δr, v-s*Δv], [r+s*Δr, v+s*Δv], size=(40,2)):
-    draw_from_beta(r,v)
+# %% tags=["remove-cell", "skip-execution", "active-ipynb"]
+# r=2.2691824192512438;    Δr = 0.000000000000001
+# v=6.79406184644904e-08;  Δv = 1e-22
+# s=2
+# rng = np.random.default_rng(45)
+# for r,v in rng.uniform([r-s*Δr, v-s*Δv], [r+s*Δr, v+s*Δv], size=(40,2)):
+#     draw_from_beta(r,v)
 
-
-# %% [markdown] user_expressions=[]
+# %% [markdown]
 # Statistics for the fitted beta distributions. $\mathbb{E}[x_1]$ and $\mathrm{std}[x_1]$ are computed from 4000 samples. $\mathbb{E}_a[x_1]$ and $\mathrm{Mvar}[x_1,x_2]$ are computed using the expressions above.
 
 # %% tags=["active-ipynb", "hide-input", "full-width"]
@@ -584,7 +719,7 @@ for r,v in rng.uniform([r-s*Δr, v-s*Δv], [r+s*Δr, v+s*Δv], size=(40,2)):
 # stattable.opts(max_rows=len(stattable)+1)  # Ensure all rows are shown
 # stattable.opts(fig_inches=18, aspect=2.5, max_value_len=30, hooks=[clean_table_mpl], backend="matplotlib")
 
-# %% [markdown] tags=["remove-cell"] user_expressions=[]
+# %% [markdown] tags=["remove-cell"]
 # `draw_from_beta` also supports passing `r` and `v` as vectors. This is mostly a convenience: internally the vectors are unpacked and $(α,β)$ are solved for individually.
 
 # %% tags=["active-ipynb", "skip-execution", "remove-cell", "full-width"]
@@ -608,7 +743,359 @@ for r,v in rng.uniform([r-s*Δr, v-s*Δv], [r+s*Δr, v+s*Δv], size=(40,2)):
 # stattable.opts(max_rows=len(stattable)+1)
 # stattable.opts(fig_inches=14, aspect=1.8, max_value_len=30, hooks=[clean_table_mpl], backend="matplotlib")
 
-# %% [markdown] user_expressions=[] tags=["remove-cell"]
+# %% [markdown] tags=["remove-cell"]
+# ### Comparative timings NumPy vs JAX
+#
+# :::{admonition} Takeaway
+# :class: important
+#
+# - JAX random number generation is about 50% slower than NumPy.
+# - We can JIT `f` and `f_mid`, because JAX provides `digamma` and `polygamma`.
+#   However, this does not affect runtime in a meaningful way.
+# - We can write `_draw_from_beta_scalar` as a JAX function, but without JITing, it is generally a few fold slower than the NumPy version (this is expected, because JAX functions have higher overhead).
+# - If we rewrite it in a functional style, as would be required for JITing, it is *many* fold slower.
+#   This is most likely due to two things (further profiling would be required to determine their relative importance):
+#   + the extra function overhead, which would disappear if we could actually JIT;
+#   + the use of the `Bisection` function instead of `brentq`
+# - We can use `jaxopt.Bisection` to get a jittable root finding function. However, it is possibly slower than `brentq`.
+# - The `jaxopt` library also provides `ScipyRootFinding`, but this just wraps `scipy.optimize.root`. So it allows the arguments to be jitted, and automatically differentiated, but it is not itself jittable.
+# - Consequently, `_draw_from_beta_scalar` is also not jittable.
+# - As a further consequence, we also can’t use `vmap` to vectorize `_draw_from_beta`, since it needs to trace through the function.
+# - **Current verdict** As it stands, JAX adds complexity with no gain. To make it worthwhile, one would need either need to at least implement a jittable multivariate solver, and then see if by jitting the whole function we obtain meaningful improvement.
+#   + `jaxopt` is written using [`lax.custom_root`](https://jax.readthedocs.io/en/latest/_autosummary/jax.lax.custom_root.html#jax.lax.custom_root). Possibly this could also be useful.
+#   + Alternatively, perhaps one can rework the problem so that finding the $α, β$ pair does not require solving a 2-d optimization problem, but some other time of problem for which `jaxopt` has a jittable function.
+# :::
+
+# %% tags=["remove-cell", "active-ipynb"]
+# # %timeit jax.random.split(subkey)
+# # %timeit jax.random.beta(subkey, 1, 1)
+#
+# # %timeit rng.beta(1, 1)
+
+# %% [markdown]
+# :::{list-table} **Timing `_draw_from_beta_scalar`.** Timings marked *"JAX (imperative)"* use an implementation very near the NumPy one, with just minimal changes (replacement of np with jnp, RNG keys, etc.). In particular, the imperative version still uses `brentq`. Timings marked *"JAX (functional)"* use the more substantial rewrite still present above, which if in theory could be compiled if the multivariate root solver (`jaxopt_mvroot_solver`) was jittable. Using `scipy_mvroot_solver` instead results in very similar times.
+# :header-rows: 2
+#
+# * -
+#   -
+#   -
+#   - No JIT
+#   -
+#   - JIT-ed *gamma
+#   -
+#   - JIT-ed bisec
+# * - L
+#   - r
+#   - v
+#   - NumPy
+#   - JAX (imperative)
+#   - NumPy
+#   - JAX (imperative)
+#   - JAX (functional)
+# * - 1
+#   - 0.2
+#   - 1e-32
+#   - 1.14 μs ± 16.2 ns (±2%)
+#   - 508 ns ± 0.614 ns (±2%)
+#   - 1.1 μs ± 0.677 ns (±4%)
+#   - 501 ns ± 0.388 ns (±1%)
+#   - 1.57 ms ± 59.6 µs
+# * - 1
+#   - 0.2
+#   - 1e-16
+#   - 1.11 μs ± 2.95 ns (±2%)
+#   - 507 ns ± 0.56 ns (±0%)
+#   - 1.1 μs ± 5.78 ns (±1%)
+#   - 501 ns ± 0.651 ns (±0%)
+#   - 1.55 ms ± 13.9 µs
+# * - 1
+#   - 0.2
+#   - 1e-08
+#   - 550 μs ± 6.47 μs (±1%)
+#   - 2.52 ms ± 12.4 μs (±1%)
+#   - 560 μs ± 782 ns (±3%)
+#   - 2.07 ms ± 16.8 μs (±5%)
+#   - 62.3 ms ± 489 µs
+# * - 1
+#   - 0.2
+#   - 0.0001
+#   - 717 μs ± 12 μs (±1%)
+#   - 2.84 ms ± 7.44 μs (±3%)
+#   - 698 μs ± 2.97 μs (±1%)
+#   - 2.22 ms ± 17.4 μs (±2%)
+#   - 75.6 ms ± 556 µs
+# * - 1
+#   - 0.2
+#   - 0.01
+#   - 737 μs ± 8.1 μs (±1%)
+#   - 2.91 ms ± 8.94 μs (±1%)
+#   - 735 μs ± 5.79 μs (±3%)
+#   - 2.23 ms ± 12.4 μs (±3%)
+#   - 76.5 ms ± 1.42 ms
+# * - 1
+#   - 0.2
+#   - 0.5
+#   - 804 μs ± 6.82 μs (±1%)
+#   - 3.02 ms ± 16.4 μs (±1%)
+#   - 805 μs ± 16.5 μs (±2%)
+#   - 2.31 ms ± 19.4 μs (±1%)
+#   - 83.3 ms ± 1.88 ms
+# * - 1
+#   - 0.5
+#   - 0.5
+#   - 757 μs ± 8.25 μs (±1%)
+#   - 2.88 ms ± 10.5 μs (±7%)
+#   - 764 μs ± 857 ns (±1%)
+#   - 2.26 ms ± 12 μs (±1%)
+#   - 76.1 ms ± 886 µs
+# * - 1
+#   - 0.5
+#   - 0.1
+#   - 735 μs ± 10.2 μs (±2%)
+#   - 2.86 ms ± 5.1 μs (±2%)
+#   - 754 μs ± 3.06 μs (±2%)
+#   - 2.28 ms ± 42 μs (±3%)
+#   - 75.7 ms ± 496 µs
+# * - 1
+#   - 0.5
+#   - 1.0
+#   - 736 μs ± 8.01 μs (±1%)
+#   - 2.86 ms ± 11.1 μs (±3%)
+#   - 727 μs ± 3.3 μs (±4%)
+#   - 2.26 ms ± 21.9 μs (±0%)
+#   - 75.6 ms ± 406 µs 
+# * - 1
+#   - 1.0
+#   - 0.5
+#   - 512 μs ± 6.09 μs (±2%)
+#   - 2.36 ms ± 9 μs (±2%)
+#   - 559 μs ± 2 μs (±2%)
+#   - 2.06 ms ± 13 μs (±2%)
+#   - 49.2 ms ± 517 µs
+# * - 1
+#   - 1.0
+#   - 10.0
+#   - 516 μs ± 7.56 μs (±2%)
+#   - 2.36 ms ± 7.87 μs (±2%)
+#   - 557 μs ± 2.22 μs (±3%)
+#   - 2.05 ms ± 19.1 μs (±2%)
+#   - 49.1 ms ± 301 µs
+# * - 1
+#   - 1.0
+#   - 100.0
+#   - 479 μs ± 7.3 μs (±1%)
+#   - 2.36 ms ± 15.4 μs (±1%)
+#   - 498 μs ± 1.66 μs (±2%)
+#   - 1.99 ms ± 17.1 μs (±1%)
+#   - 48.9 ms ± 252 µs
+# * - 1
+#   - 1.0
+#   - 1000.0
+#   - 461 μs ± 10.3 μs (±2%)
+#   - 2.31 ms ± 2.92 μs (±2%)
+#   - 483 μs ± 3.23 μs (±1%)
+#   - 1.98 ms ± 8.52 μs (±1%)
+#   - 49 ms ± 312 µs
+# * - 1
+#   - 1.0
+#   - 100000.0
+#   - 2.11 μs ± 62.1 ns (±8%)
+#   - 810 μs ± 1.51 μs (±1%)
+#   - 2.07 μs ± 33.3 ns (±4%)
+#   - 810 μs ± 2.65 μs (±2%)
+#   - 1.29 ms ± 19.6 µs
+# * - 1
+#   - 1.0
+#   - 1000000.0
+#   - 2.07 μs ± 18.5 ns (±4%)
+#   - 811 μs ± 2.22 μs (±1%)
+#   - 2.05 μs ± 15.6 ns (±3%)
+#   - 809 μs ± 1.35 μs (±0%)
+#   - 1.28 ms ± 5.65 µs
+# * - 1
+#   - 5.0
+#   - 0.5
+#   - 805 μs ± 10 μs (±1%)
+#   - 3.02 ms ± 4.95 μs (±2%)
+#   - 790 μs ± 628 ns (±5%)
+#   - 2.27 ms ± 8.23 μs (±2%)
+#   - 85.4 ms ± 2.6 ms
+# * - 1
+#   - 5.0
+#   - 8.0
+#   - 853 μs ± 11.5 μs (±0%)
+#   - 3.16 ms ± 34.4 μs (±1%)
+#   - 829 μs ± 3.2 μs (±2%)
+#   - 2.31 ms ± 17.3 μs (±1%)
+#   - 90.6 ms ± 1.18 ms
+# * - 1
+#   - 5.0
+#   - 10000.0
+#   - 587 μs ± 9.9 μs (±3%)
+#   - 2.67 ms ± 28.2 μs (±0%)
+#   - 573 μs ± 990 ns (±1%)
+#   - 2.07 ms ± 18.3 μs (±1%)
+#   - 62 ms ± 490 µs
+# * - 1
+#   - 5.0
+#   - 20000.0
+#   - 2.06 μs ± 19.8 ns (±2%)
+#   - 813 μs ± 5.46 μs (±2%)
+#   - 2.05 μs ± 16.6 ns (±1%)
+#   - 808 μs ± 1.38 μs (±2%)
+#   - 1.28 ms ± 6 µs
+# * - 1
+#   - 5.0
+#   - 40000.0
+#   - 2.16 μs ± 10.2 ns (±3%)
+#   - 819 μs ± 7.11 μs (±1%)
+#   - 2.07 μs ± 9.88 ns (±3%)
+#   - 806 μs ± 1.95 μs (±0%)
+#   - 1.28 ms ± 11.1 µs
+# * - 1
+#   - 5.0
+#   - 1000000.0
+#   - 2.06 μs ± 13.3 ns (±3%)
+#   - 834 μs ± 1.26 μs (±2%)
+#   - 2.06 μs ± 15.5 ns (±2%)
+#   - 814 μs ± 2.21 μs (±1%)
+#   - 1.28 ms ± 13.6 µs
+# * - 1
+#   - 5.0
+#   - 100000000.0
+#   - 2.08 μs ± 13 ns (±3%)
+#   - 835 μs ± 1.88 μs (±2%)
+#   - 2.05 μs ± 12 ns (±2%)
+#   - 813 μs ± 1.25 μs (±1%)
+#   - 1.27 ms ± 10.6 µs
+# * - 1
+#   - 5.0
+#   - 1e+16
+#   - 2.06 μs ± 24 ns (±3%)
+#   - 827 μs ± 2.65 μs (±5%)
+#   - 2.05 μs ± 15.4 ns (±4%)
+#   - 812 μs ± 2.74 μs (±0%)
+#   - 1.27 ms ± 5.78 µs
+# * - 1
+#   - 5.0
+#   - 1e+32
+#   - 2.11 μs ± 38.9 ns (±2%)
+#   - 822 μs ± 9.73 μs (±1%)
+#   - 2.06 μs ± 13.8 ns (±6%)
+#   - 807 μs ± 2.03 μs (±1%)
+#   - 1.28 ms ± 33.4 µs 
+# :::
+
+# %% tags=["active-ipynb", "remove-cell"]
+# # r_vals, v_vals = np.array(
+# #     [(0.2, 1e-32), (0.2, 1e-16), (0.2, 1e-8), (0.2, 1e-4), (0.2, 1e-2), (0.2, 0.5),
+# #      (0.5, 0.5), (0.5, 0.1), (0.5, 1),
+# #      (1, 0.5), (1, 1e1), (1, 1e2), (1, 1e3), (1, 1e5), (1, 1e6),
+# #      (5, 0.5), (5, 8), (5, 1e4), (5, 2e4), (5, 4e4), (5, 1e6), (5, 1e8), (5, 1e16), (5, 1e32)]
+# # ).T
+
+# %% tags=["active-ipynb", "remove-cell"]
+# # key = jax.random.PRNGKey(0)
+# # key, *subkeys = jax.random.split(key, 2)
+# # rng = np.random.Generator(np.random.PCG64(0))
+#
+# # from collections import namedtuple
+# # ResData = namedtuple("ResData", ["avg", "std", "diff_percent"])
+# # def get_resdata(res_lst):
+# #     avgs = [res.average for res in res_lst]
+# #     stds = [res.stdev for res in res_lst]
+# #     slst = []
+# #     i = np.argmin(avgs)
+# #     diff_percent = (np.max(avgs) - np.min(avgs)) / avgs[i] if len(res_lst) > 1 \
+# #                    else None
+# #     return ResData(avgs[i], stds[i], diff_percent)
+
+# %% tags=["remove-cell", "active-ipynb"]
+# # try:
+# #     time_data = np.load("timing_cache_jax-vs-numpy_draw-from-beta.npy")
+# # except FileNotFoundError:
+# #     time_results = {}
+# # else:
+# #     time_results = {(L, r, v): (ResData(npa, npb, npc), ResData(jaxa, jaxb, jaxc))
+# #                     for (L, r, v, npa, npb, npc, jaxa, jaxb, jaxc) in time_data}
+
+# %% tags=["active-ipynb", "remove-cell"]
+# # def timing_run(func, desc, rng_lst, time_results):
+# #     progL = tqdm([1], desc="Sample size")  # [1, 7, 49, 343]
+# #     progrv = tqdm(list(zip(r_vals, v_vals)), desc="r, v")
+# #     for L in progL:
+# #         progrv.reset()
+# #         for r, v in progrv:
+# #             if (L, r, v, desc) in time_results:
+# #                 continue
+# #             # Warm-up to make sure compilation is not included in profiling time
+# #             _, x = func(r, v, rng_lst[0]); getattr(x, "block_until_ready", lambda:None)()
+# #             res_lst = []
+# #             for rng in rng_lst:
+# #                 res = %timeit -o func(r, v, rng)
+# #                 res_lst.append(res)
+# #             time_results[(L, r, v, desc)] = get_resdata(res_lst)
+
+# %% tags=["active-ipynb", "remove-cell", "skip-execution"]
+# # timing_run(_draw_from_beta_scalar_jax, "jax, functional", subkeys, time_results=time_results)
+
+# %% tags=["active-ipynb", "remove-cell"]
+# # progL = tqdm([1], desc="Sample size")  # [1, 7, 49, 343]
+# # progrv = tqdm(list(zip(r_vals, v_vals)), desc="r, v")
+# # for L in progL:
+# #     progrv.reset()
+# #     for r, v in progrv:
+# #         if (L, r, v) in time_results:
+# #             continue
+# #         res_np = []
+# #         res_jax = []
+# #         for subkey in subkeys:
+# #             res = %timeit -o _draw_from_beta_scalar(r, v, rng)
+# #             res_np.append(res)
+# #             res = %timeit -o _draw_from_beta_scalar_jax(r, v, subkey)
+# #             res_jax.append(res)
+# #         time_results[(L, r, v)] = (get_resdata(res_np), get_resdata(res_jax))
+
+# %% tags=["remove-cell", "active-ipynb"]
+# # _time_data = np.array([
+# #     [L, r, v, *res_np, *res_jax]
+# #     for (L, r, v), (res_np, res_jax) in time_results.items()
+# # ])
+
+# %% tags=["active-ipynb", "remove-cell"]
+# # np.save("timing_cache_jax-vs-numpy_draw-from-beta", _time_data)
+
+# %%
+# for ((L, r, v, npa, npb, npc, jaxa, jaxb, jaxc),
+#      (_, _, _, _npa, _npb, _npc, _jaxa, _jaxb, _jaxc)) in zip(time_data, _time_data):
+#     print("* -", int(L))
+#     print("  -", r)
+#     print("  -", v)
+#     print("  -", time_str(ResData(npa, npb, npc)))
+#     print("  -", time_str(ResData(jaxa, jaxb, jaxc)))
+#     print("  -", time_str(ResData(_npa, _npb, _npc)))
+#     print("  -", time_str(ResData(_jaxa, _jaxb, _jaxc)))                       
+
+# %% tags=["remove-cell", "active-ipynb"]
+# # def format_with_unit(val, unit):
+# #     if val >= 1:
+# #         pass
+# #     elif val >= 1e-3:
+# #         val, unit = val*1e3, f"m{unit}"
+# #     elif val >= 1e-6:
+# #         val, unit = val*1e6, f"μ{unit}"
+# #     else:
+# #         val, unit = val*1e9, f"n{unit}"
+# #     return f"{val:.3g} {unit}"
+# # def time_str(data: ResData):
+# #     return f"{format_with_unit(data.avg, 's')} ± {format_with_unit(data.std, 's')} (±{data.diff_percent*100:.0f}%)"
+# # time_table = hv.Table([(int(L), r, v, time_str(ResData(npa, npb, npc)), time_str(ResData(jaxa, jaxb, jaxc)))
+# #                        for (L, r, v, npa, npb, npc, jaxa, jaxb, jaxc) in time_data],
+# #                       kdims=["# fits", "r", "v"], vdims=["NumPy", "JAX"])
+# # time_table.opts(aspect=20/len(time_table), fig_inches=10, backend="matplotlib") \
+# #           .opts(fit_columns=True, width=1000, backend="bokeh", )
+
+# %% [markdown] tags=["remove-cell"]
 # ### Timings for the root solver
 
 # %% [markdown] tags=["remove-cell"]
