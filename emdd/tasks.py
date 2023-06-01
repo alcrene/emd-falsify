@@ -198,12 +198,16 @@ def compute_Bemd(models_c, Ldata, Ltheo, seeds):
     # than 1000 path samples to evaluate the path integral within the default margin.
     # The further paths are from the most likely one, the more likely they are to trigger numerical warnings.
     # This is expected, so we turn off warnings to avoid spamming the console.
-    logging.getLogger("emdd.emd").setLevel(logging.ERROR)
+    emdlogger = logging.getLogger("emdd.emd")
+    emdlogginglevel = emdlogger.level
+    emdlogger.setLevel(logging.ERROR)
     
     # Compute the Bemd
     return Bemd(data, logpA, logpB, samplesA, samplesB, c=c,
                 progbarA=None, progbarB=None, use_multiprocessing=False)
 
+    # Reset logging level as it was before
+    emdlogger.setLevel(emdlogginglevel)
 
 # %%
 def compute_Bconf(MX, Mtrue, MA, MB, Linf, seeds):

@@ -9,12 +9,12 @@
 #       format_name: percent
 #       format_version: '1.3'
 #   kernelspec:
-#     display_name: Python (EMD-paper)
+#     display_name: Python (emd-paper)
 #     language: python
 #     name: emd-paper
 # ---
 
-# %% [markdown]
+# %% user_expressions=[] editable=true slideshow={"slide_type": ""} tags=["active-ipynb"]
 # (code_models)=
 # # Models
 # $\renewcommand{\EE}{\mathbb{E}}
@@ -31,9 +31,8 @@
 # \renewcommand{\Gammadist}{\mathop{\mathrm{Gamma}}}
 # \renewcommand{\Lognormal}{\mathop{\mathrm{Lognormal}}}$
 #
-# :::{margin}
-# **TODO**: Add link to paper.
-# :::  
+# > **TODO**: Add link to paper.
+#
 # This module provides a few simple models for use with the inferred model distance functions defined in [emd.py](./emd.py). To use these functions, a model must be divided into three parts:
 # - An independent value generator, typically $x$ or $t$. ($x \sim p_x$)
 # - A physical model. ($z \sim p_z(x)$)
@@ -50,17 +49,18 @@
 # - *Physical model*: $x, \mathtt{[seed]} \rightarrow z$
 # - *Observation model*: $x, z, \mathtt{[seed]} \rightarrow y$
 #
-# The `seed` argument *must* be accepted, and *must* be optional. For stochastic models it should set state of the employed random number generator; for deterministic models it should be ignored.
+# The `seed` argument *must* be accepted, and *must* be optional. For stochastic models it should set the state of the employed random number generator; for deterministic models it should be ignored.
 #
-# The main thing is that the distance functions will *only* use the parameters above (some combination of $L$, $x$, $z$ and `seed`). Any additional parameter must therefore already be associated to the model. This can be achieved in a number of ways, for example by hard-coding them in the functions, by wrapping functions with `functools.partial`, or by defining them as callable classes (i.e. classes with a `__call__` method).
+# The main thing is that the distance functions will only use the parameters above (some combination of $L$, $x$, $z$ and `seed`). Any additional parameter must therefore already be associated to the model. This can be achieved in a number of ways, for example by hard-coding them in the functions, by wrapping functions with `functools.partial`, or by defining them as callable classes (i.e. classes with a `__call__` method).
 #
 # **Implementation**
-# The model implementations we provide use callable [dataclasses](https://docs.python.org/3/library/dataclasses.html); class instances store parameters (as well as a possible random seed) as attributes. Users may inherit from them to use their seed management, or simply use them as inspiration for their own implementations.
+# The model implementations we provide use callable [dataclasses](https://docs.python.org/3/library/dataclasses.html); class instances store parameters (as well as a possible random seed) as attributes. Users may inherit from them to use their seed management, or simply use them as inspiration for their own implementations. Using dataclasses can be convenient, but is not necessary.
 #
 # *Seed management feature*:
-# A seed may be provided both when instantiating a model, *and* when calling for samples. The idea is that we may want different “sources of unicity”: a big unique random seed for the whole project, different seeds for different experiments, different seeds for data sets within an experiment, etc. Seeds can be passed as ints or tuples, and both the instantiation and calling seeds are combined to produce a unique random state for the random number generator.
+# The model classes implement in this module provide allow to specify a seed  both when instantiating a model, *and* when calling for samples. The idea is that we may want different “sources of unicity”: a big unique random seed for the whole project, different seeds for different experiments, different seeds for data sets within an experiment, etc. Seeds can be passed as ints or tuples, and both the instantiation and calling seeds are combined to produce a unique random state for the random number generator.
+# We encourage users which implement their own models to also provide this feature.
 
-# %% tags=["hide-input"]
+# %% editable=true slideshow={"slide_type": ""}
 import emdd
 
 from abc import ABC, abstractmethod
@@ -68,11 +68,12 @@ from collections import Counter
 from collections.abc import Callable, Sequence
 from functools import lru_cache
 from dataclasses import InitVar, dataclass
-from typing import Union, Tuple
+from typing import Optional, Union, Tuple
 
 from more_itertools import always_iterable
 import numpy as np
 from numpy.random import Generator, PCG64
+from numpy.typing import ArrayLike
 from scipy import stats
 from scipy.optimize import root_scalar, minimize
 
@@ -164,6 +165,15 @@ SeedType = Union[None,int,Tuple[int]]
 #
 # :::
 
+# %% [markdown]
+# :::{admonition} TODO
+# :class: important
+#
+# The UI of `FullModel.logpdf` with a stochastic physical model is not yet completely worked out.
+# Currently this is done by accepting an additional `phys_seed` argument to `logpdf`, but do we really want a `logpdf` call to be random ? That would break some pretty basic assumptions.
+# Then again, it’s not clear to me how `logpdf` could be anything *but* stochastic, if the physical model is stochastic. Maybe one should have a different name in this case, to make the stochasticity clear ? E.g. `logpdf_rv` ?
+# :::
+
 # %%
 @dataclass(frozen=True)
 class Model(ABC):
@@ -175,17 +185,49 @@ class Model(ABC):
         yield Dataclass.validate  #   to automatically deserialize w/ Pydantic
 
 
-# %%
+# %% editable=true slideshow={"slide_type": ""}
+@dataclass(frozen=True)
+class PhysModel(Model):
+    """Signature: (x) -> z"""
+    @abstractmethod
+    def __call__(self, x: ArrayLike, seed: SeedType=None) -> ArrayLike:
+        raise NotImplementedError
+
+
+# %% editable=true slideshow={"slide_type": ""}
+@dataclass(frozen=True)
+class ObsModel(Model):
+    """Signature: (x, z) -> y"""
+    @abstractmethod
+    def __call__(self, x: ArrayLike, seed: SeedType=None) -> ArrayLike:
+        raise NotImplementedError
+    @abstractmethod
+    def logpdf(self, x: ArrayLike, y: Optional[ArrayLike]=None) -> ArrayLike:
+        raise NotImplementedError
+
+
+# %% editable=true slideshow={"slide_type": ""}
 @dataclass(frozen=True)
 class FullModel:
-    phys: Model
-    obs : Model
+    """
+    Signatures:
+       - phys: (x)   -> z
+       - obs : (x,z) -> y
+    """
+    phys: PhysModel
+    obs : ObsModel
     @classmethod
     def __get_validators__(cls):
         yield Dataclass.validate
+    def __call__(self, x, phys_seed: SeedType=None, obs_seed: SeedType=None):
+        return self.obs(x, self.phys(x, seed=phys_seed), seed=obs_seed)
+    def logpdf(self, x, y=None, phys_seed: SeedType=None):
+        if y is None: x, y = x   # (y, x) can also be passed as a single tuple
+        return self.obs.logpdf(self.phys(x, seed=phys_seed), y)
 
 
 # %% [markdown]
+#
 # (code_models_indep)=
 # ## Independent variable models
 #
@@ -212,7 +254,7 @@ class FullModel:
 #     do something
 # ```
 
-# %%
+# %% editable=true slideshow={"slide_type": ""}
 @dataclass(frozen=True)
 class StatXModel(Model):
     """
@@ -292,7 +334,7 @@ class UniformX(StatXModel):
 
 # %%
 @dataclass(frozen=True)
-class SequentialX(Model):
+class Sequential(Model):
     x0: float=0.
     Δx: float=1.
     def __iter__(self):
@@ -302,7 +344,7 @@ class SequentialX(Model):
             yield self.x0 + i*self.Δx  # More numerically stable than always adding Δx
             i += 1
     def __call__(self, L):
-        return np.array([x for x, _ in zip(self, range(L))])
+        return np.stack([x for x, _ in zip(self, range(L))])
 
 
 # %% [markdown]
@@ -357,10 +399,10 @@ class LinspaceX(Model):
 
 # %%
 @dataclass(frozen=True)
-class DeterministicExpon(Model):
+class DeterministicExpon(PhysModel):
     λ: float=1.
     seed: NoneType=None  # Only for consistency with probabilistic models
-    def __call__(self, x):
+    def __call__(self, x, seed: None=None):
         return np.exp(-self.λ*x)
 
 
@@ -393,8 +435,8 @@ class DeterministicExpon(Model):
 # %% [markdown] user_expressions=[]
 # :::{hint} Generative vs inference observation models
 #
-# For inference, we restrict ourselves to distributions that have support over $(-\infty, \infty)$. Otherwise, if even a single data point falls outside the support (which is often occurs when the model does not match the data perfectly), the likelihood diverges to $-\infty$, preventing any comparison of models.
-# When generating synthetic data we do not have this constraint (the model is by definition always exact). This allows generating data using distributions which have support on $(0, \infty)$ for the noise model, such as exponential, Poisson or lognormal distributions.
+# For inference, we restrict ourselves to distributions that have support over $(-\infty, \infty)$. Otherwise, if even a single data point falls outside the support (which often occurs when the model does not match the data perfectly), the likelihood diverges to $-\infty$, preventing any comparison of models.
+# When generating synthetic data we do not have this constraint (the model is by definition always exact). This allows generating data with distributions that have support on $(0, \infty)$ for the noise model, such as exponential, Poisson or lognormal distributions.
 #
 # Note that unsupported data samples are only the most salient examples of this issue. More generally, bounded distributions are very sensitive[^safe-bounded] to the location of their upper or lower bound, to the point of making fits unstable. In some cases it may be possible to remedy this by fixing the bound(s), but that constitutes a strong inductive bias which must be warranted.
 # :::
@@ -403,11 +445,11 @@ class DeterministicExpon(Model):
 # The requirement that inference noise model have support on $\RR$ means that if the true noise model has bounded support, then for any practical inference model there will always be some mismatch between model and data.
 # :::
 #
-# [^safe-bounded]: This is because there is a sharp decrease in probability density at the bound. Counter examples exist, like unbounded distributions which truncated far into their tails, but are not what one usually intends as bounded distributions.
+# [^safe-bounded]: This is because there is a sharp decrease in probability density at the bound. Counter examples exist, like unbounded distributions which are truncated far into their tails, but are not what one usually intends as bounded distributions.
 
-# %%
+# %% editable=true slideshow={"slide_type": ""}
 @dataclass(frozen=True)
-class AdditiveRVError(Model):
+class AdditiveRVError(ObsModel):
     """
     Base class for experimental models consisting of adding noise from a
     scipy.stats random variable. If this random is denoted RV, then the
@@ -432,21 +474,8 @@ class AdditiveRVError(Model):
         if seed is None and self.seed is None:
             raise RuntimeError("`seed` was not specified: cannot draw random samples.")
         return z + self.get_rv(seed).rvs(size=z.shape)
-    def logpdf(self, y, z):
+    def logpdf(self, z, y):
         return self.get_rv().logpdf(y - z)
-    
-    # @property
-    # def random_state(self):
-    #     return self.seed
-    # @random_state.setter
-    # def random_state(self, value):
-    #     if isinstance(value, int):
-    #         self.seed = value
-    #     elif (isinstance(value, Sequence)
-    #           and all(isinstance(i, int) for i in value)):
-    #         self.seed = tuple(value)
-    #     else:
-    #         raise TypeError("`random_state` accepts only integers or tuples of integers.")
 
 
 # %% [markdown]
@@ -590,7 +619,7 @@ class SkewNormalError(AdditiveRVError):
 # An $\exGaussian$ random variable may be expressed as the sum of a Gaussian and an exponential distribution.
 # The skew is thefore strictly positive, and in fact constrained to $γ \in [0, 2)$.
 #
-# $γ \to 0$ recovers the Gaussian distribution in the limit. This corresponds the rate $λ$ of the exponential distribution to $\infty$.
+# $γ \to 0$ recovers the Gaussian distribution in the limit. This corresponds to setting the rate $λ$ of the exponential distribution to $\infty$.
 #
 # $γ \to 2$ corresponds to the rate $λ$ going to 0. This is an improper distribution, with PDF proportional to the Heaviside function.
 #
@@ -891,7 +920,7 @@ class NormInvGaussError(AdditiveRVError):
 # ___
 #
 # :::{caution}
-# The distributions below have bounded support. [As noted above](code_mode_obs), they should not be use for inference, but can be used to generate synthetic data.
+# The distributions below have bounded support. [As noted above](code_models_obs), they should not be use for inference, but can be used to generate synthetic data.
 # :::
 #
 # ### Exponential error

@@ -9,7 +9,7 @@
 #       format_version: '1.5'
 #       jupytext_version: 1.14.5
 #   kernelspec:
-#     display_name: Python (EMD-paper)
+#     display_name: Python (emd-paper)
 #     language: python
 #     name: emd-paper
 # ---
@@ -179,7 +179,7 @@ except ModuleNotFoundError:
 # \tilde{σ} &= c \sin \frac{3 π Φ}{4} \,,  & c &\in \mathbb{R}_+ \,.
 # \end{aligned}$$
 
-# + tags=["active-ipynb", "hide-input"]
+# + tags=["active-ipynb", "hide-input"] editable=true slideshow={"slide_type": ""}
 # res = 7
 # Φarr = np.arange(1, 2**res) / 2**res
 # ltilde = np.log(Φarr)
@@ -228,15 +228,21 @@ except ModuleNotFoundError:
 # \end{aligned}$$
 # :::
 
-def compute_stats_m1(data: "array_like", logp: Callable,
+# + editable=true slideshow={"slide_type": ""}
+@memoize(ignore=["path_progbar"])
+def draw_Elogp_samples(data: "array_like", logp: Callable,
                      model_samples: "array_like"=None,
                      *, model_ppf: Callable=None,
                      c: float=None,
                      res: int=7, N: int=100, R: int=30, max_R: int=1000,
                      relstderr_tol: float=4e-3,
                      path_progbar: Union[Literal["auto"],None,tqdm,mp.queues.Queue]=None,
-                    ) -> Tuple[float, float]:
+                    ) -> Array[float, 1]:
     """
+    Compute statistics of the expected log probability on unseen data with unknown
+    observation noise. In other words, we treat ``logp(x)`` as a random variable,
+    and want to describe the distribution of ``E[logp(x)]``.
+    This computes the first two cumulants (the mean and variance) of that distribution.
         
     .. Note:: When using multiprocessing to call this function multiple times,
        use either a `multiprocessing.Queue` or `None` for the `progbar` argument.
@@ -291,8 +297,8 @@ def compute_stats_m1(data: "array_like", logp: Callable,
        
     Returns
     -------
-    μ1
-    Σ1
+    μ: Mean of ``E[logp(x)]``.
+    Σ: Variance of ``E[logp(x)]``.
     
     Todo
     ----
@@ -322,7 +328,7 @@ def compute_stats_m1(data: "array_like", logp: Callable,
             # Align the model CDF to the data CDF using linear interpolation
             _L = len(_ltilde)
             _Φarr = np.arange(1, _L+1) / (_L+1)
-            ltilde = interp1d(_Φarr, _ltilde)(Φarr)
+            ltilde = interp1d(_Φarr, _ltilde, fill_value="extrapolate")(Φarr)
 
     # Compute EMD and σtilde
     emd = abs(l - ltilde)
@@ -360,9 +366,28 @@ def compute_stats_m1(data: "array_like", logp: Callable,
     if relstderr > relstderr_tol:
         logger.warning("Requested std err tolerance was not achieved. "
                        f"std err: {relstderr}\nRequested max std err: {relstderr_tol}")
-    return μ1, Σ1
+    return np.array(m1)
 
 
+# + editable=true slideshow={"slide_type": ""}
+def compute_stats_m1(*args, **kwargs) -> Tuple[float, float]:
+    """
+    Wrapper around `draw_Elogp_samples` which returns the statistics of the
+    samples instead of the samples themselves. Partly provided for compatibility
+    with scripts which expect this, but also because this function skips the
+    memoization of `draw_Elogp_samples`. This can be useful if we expect it to
+    be called many times (as in a calibration experiment), to avoid swamping
+    the cache directory.
+
+    .. Note:: This function is NOT cached. The expectation is that it will be
+       used as part of a wider loop which may call it many times.
+    """
+    # Calling the underlying __wrapped__ function avoids caching
+    Elogp_samples = draw_Elogp_samples.__wrapped__(*args, **kwargs)
+    return Elogp_samples.mean(), Elogp_samples.var()
+
+
+# + [markdown] editable=true slideshow={"slide_type": ""}
 # ### Test computation of first moment statistics
 #
 # $$\begin{aligned}
@@ -373,7 +398,15 @@ def compute_stats_m1(data: "array_like", logp: Callable,
 # Theory model: $λ=1$, $ξ \sim \nN(0, 1)$.  
 # True model: $λ=1$, $ξ \sim \nN(-0.03, 1)$.
 
-# + tags=["active-ipynb"]
+# + editable=true slideshow={"slide_type": ""} tags=["active-ipynb"]
+# :::{hint}
+# :class: margin
+#
+# Here we use plain custom functions to illustrate that `Elogp_stats` can be used with arbitrary callables, but for our own use we find the provided [FullModel class](./models.py) helpful: it packages physical and observation models into a standardized object.  
+# Higher level functions, like those in the [tasks module](./tasks.py), use this to define pipeline which don’t need to know anything about the particular physical and observation model.
+# :::
+
+# + editable=true slideshow={"slide_type": ""} tags=["active-ipynb"]
 # λ = 1
 # δy = -0.03
 # L = 400
@@ -382,23 +415,23 @@ def compute_stats_m1(data: "array_like", logp: Callable,
 #     rng = default_rng(seed)
 #     x = rng.uniform(0, 3, L)
 #     y = np.exp(-λ*x) + rng.normal(-0.03, 1, L)
-#     return x, y
+#     return y, x
 # def theory_gen(L, seed=None):
 #     rng = default_rng(seed)
 #     x = rng.uniform(0, 3, L)
 #     y = np.exp(-λ*x) + rng.normal(0, 1, L)
-#     return x, y
+#     return y, x
 # def theory_logp(xy):
 #     x, y = xy
-#     return stats.norm(0, 1).logpdf(y - np.exp(-λ*x))
+#     return stats.norm(0, 1).logpdf(y - np.exp(-λ*x))  # z = exp(-λ*x)
 #
 # data = true_gen(L)
 
-# + tags=["active-ipynb"]
+# + tags=["active-ipynb"] editable=true slideshow={"slide_type": ""}
 # compute_stats_m1(data, theory_logp, theory_gen(1000),
 #                  c=1, N=50, R=100)
-# -
 
+# + editable=true slideshow={"slide_type": ""} tags=["active-ipynb"]
 # (supp_emd-implementation_Bemd)=
 # ## Implementation of $\Bemd$
 #
@@ -413,22 +446,22 @@ def compute_stats_m1(data: "array_like", logp: Callable,
 #
 # **Return**
 #
-# - $\Bemd\bigl(\Elmu{A}, \Elsig{A}, \Elmu{B}, \Elsig{B}\bigr)$, where the moments are given by `compute_stats_m1`.
+# - $\Bemd\bigl(\Elmu{A}, \Elsig{A}, \Elmu{B}, \Elsig{B}\bigr)$, where the moments are given by `compute_logp_cumulants`.
 
 # +
 def mp_wrapper(f: Callable, *args, out: "mp.queues.Queue", **kwargs):
     "Wrap a function by putting its return value in a Queue. Used for multiprocessing."
     out.put(f(*args, **kwargs))
     
-CallableLike = Union[Callable, Tuple[Callable, Mapping]]
+LazyPartial = Union[Callable, Tuple[Callable, Mapping]]
 
 
 # -
 
 @memoize(ignore=["progbarA", "progbarB", "use_multiprocessing"])
 def Bemd(data: "array_like",
-         logpA: CallableLike, logpB: CallableLike,
-         model_samplesA: "array_like"=None, model_samplesB: "array_like"=None,
+         logpA: Union[Callable,LazyPartial], logpB: Union[Callable,LazyPartial],
+         model_samplesA: "array_like"=None , model_samplesB: "array_like"=None,
          *, model_ppfA: Callable=None, model_ppfB: Callable=None,
          c: float=None,
          res: int=7, N: int=100, R: int=30, relstderr_tol: float=4e-3,
@@ -444,6 +477,9 @@ def Bemd(data: "array_like",
     logpA, logpB: Log probability functions, as given by the model we want to characterize.
        Must support the vectorized operation ``logp(data)``.
        Functions should typically correspond to either the likelihood, or likelihood x priors.
+       It is also allowed to pass a tuple ``(logp, kwds)``, composed of the likelihood
+       function and keyword parameters. This is then reconstructed with
+       ``functools.partial(logp, **kwds)``
     model_samplesA, model_samplesB: Data sets drawn from the models we want to characterize.
        Must have the same format as `data`, but need not have the same number of samples.
        This must be equivalent to samples drawn from the distribution specified by `logp`.
@@ -513,11 +549,11 @@ def Bemd(data: "array_like",
         logpB = partial(logpB, **kwds)
     
     if not use_multiprocessing:
-        μA, ΣA = compute_stats_m1(
+        μA, ΣA = compute_logp_cumulants(
             data, logpA, model_samplesA, model_ppf=model_ppfA,
             c=c, res=res, N=N, R=R, relstderr_tol=relstderr_tol,
             path_progbar=progbarA)
-        μB, ΣB = compute_stats_m1(
+        μB, ΣB = compute_logp_cumulants(
             data, logpB, model_samplesB, model_ppf=model_ppfA,
             c=c, res=res, N=N, R=R, relstderr_tol=relstderr_tol,
             path_progbar=progbarB)

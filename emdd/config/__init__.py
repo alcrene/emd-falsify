@@ -22,17 +22,8 @@ class Config(ValConfig):
     __default_config_path__   = "defaults.cfg"
 
     class paths:
-        projectdir : Path
-        # configdir  : Path="config"
         figuresdir : Path
 
-        # _prepend_rootdir = prepend_rootdir("figuresdir")
-
-        # _ensure_dir_exists = ensure_dir_exists("figuresdir")
-        
-        # _prepend_rootdir = validator("figuresdir",
-        #                              allow_reuse=True
-        #                             )(prepend_rootdir)
         _ensure_dir_exists = validator("figuresdir", allow_reuse=True
                                       )(ensure_dir_exists)
 
