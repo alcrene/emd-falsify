@@ -312,31 +312,31 @@ def draw_Elogp_samples(data: "array_like", logp: Callable,
         raise TypeError("`c` argument to `compute_stats_m1` is required.")
 
     # Get the log likelihood CDF for observed samples
-    l = np.sort(logp(data))
-    L = len(l)
+    l_empirical = np.sort(logp(data))
+    L = len(l_empirical)
     Φarr = np.arange(1, L+1) / (L+1)  # Exclude 0 and 1 from Φarr, since we have only finite samples
 
     # Get the log likelihood CDF for the model
     if model_ppf:
-        ltilde = np.log(model_ppf(Φarr))
+        l_theory = np.log(model_ppf(Φarr))
     else:
-        _ltilde = np.sort(logp(model_samples))
-        # NB: _ltilde is always a 1d array, even though model_samples could be (x,y), or (x, (y1, y2)), or (x, y)^T
-        if len(_ltilde) == L:
-            ltilde = _ltilde
+        _l_theory = np.sort(logp(model_samples))
+        # NB: _l_theory is always a 1d array, even though model_samples could be (x,y), or (x, (y1, y2)), or (x, y)^T
+        if len(_l_theory) == L:
+            l_theory = _l_theory
         else:
             # Align the model CDF to the data CDF using linear interpolation
-            _L = len(_ltilde)
+            _L = len(_l_theory)
             _Φarr = np.arange(1, _L+1) / (_L+1)
-            ltilde = interp1d(_Φarr, _ltilde, fill_value="extrapolate")(Φarr)
+            l_theory = interp1d(_Φarr, _l_theory, fill_value="extrapolate")(Φarr)
 
     # Compute EMD and σtilde
-    emd = abs(l - ltilde)
+    emd = abs(l_empirical - l_theory)
     σtilde = c * emd
 
     # Compute m1 for enough sample paths to reach relstderr_tol
     m1 = []
-    def extend_m(R, previous_R=0, Φarr=Φarr, ltilde=ltilde, σtilde=σtilde):
+    def extend_m(R, previous_R=0, Φarr=Φarr, ltilde=l_empirical, σtilde=σtilde):
         for Φhat, lhat in generate_quantile_paths(R, Φarr, ltilde, σtilde, res, progbar=path_progbar, previous_R=previous_R):
             m1.append(simpson(lhat, Φhat))  # Generated paths always have an odd number of steps, which is good for Simpson's rule
 
