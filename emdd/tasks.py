@@ -1,5 +1,20 @@
 # -*- coding: utf-8 -*-
-# %%
+# ---
+# jupyter:
+#   jupytext:
+#     formats: py:percent
+#     text_representation:
+#       extension: .py
+#       format_name: percent
+#       format_version: '1.3'
+#       jupytext_version: 1.14.5
+#   kernelspec:
+#     display_name: Python (emd-paper)
+#     language: python
+#     name: emd-paper
+# ---
+
+# %% editable=true slideshow={"slide_type": ""}
 from __future__ import annotations
 
 # %% [markdown]
@@ -9,8 +24,11 @@ from __future__ import annotations
 # - Maintaining an electronic lab book: recording all input/code/output triplets, along with a bunch of metadata to ensure reproducibility (execution date, code versions, etc.)
 # - Avoid re-running calculations, with hashes that are both portable and long-term stable.
 
-# %%
-from config import config
+# %% tags=["active-ipynb"] editable=true slideshow={"slide_type": ""}
+# from config import config   # Notebook
+
+# %% tags=["active-py"] editable=true slideshow={"slide_type": ""} raw_mimetype=""
+from .config import config  # Python script
 
 # %%
 import psutil
