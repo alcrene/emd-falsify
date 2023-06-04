@@ -14,7 +14,7 @@
 #     name: emd-paper
 # ---
 
-# %% [markdown] tags=["remove-cell"]
+# %% [markdown] tags=["remove-cell"] editable=true slideshow={"slide_type": ""}
 # ---
 # math:
 #   '\lnLtt': '{\tilde{l}}'

@@ -230,7 +230,7 @@ except ModuleNotFoundError:
 
 # + editable=true slideshow={"slide_type": ""}
 @memoize(ignore=["path_progbar"])
-def draw_Elogp_samples(data: "array_like", logp: Callable,
+def draw_elppd_samples(data: "array_like", logp: Callable,
                      model_samples: "array_like"=None,
                      *, model_ppf: Callable=None,
                      c: float=None,
@@ -309,7 +309,7 @@ def draw_Elogp_samples(data: "array_like", logp: Callable,
     if (model_samples is None) + (model_ppf is None) != 1:
         raise TypeError("Exactly one of `model_samples` and `model_cdf` must be specified.")
     if c is None:
-        raise TypeError("`c` argument to `compute_stats_m1` is required.")
+        raise TypeError("`c` argument to `compute_elppd_stats` is required.")
 
     # Get the log likelihood CDF for observed samples
     l_empirical = np.sort(logp(data))
@@ -369,8 +369,13 @@ def draw_Elogp_samples(data: "array_like", logp: Callable,
     return np.array(m1)
 
 
+# -
+
+draw_Elogp_samples = draw_elppd_samples
+
+
 # + editable=true slideshow={"slide_type": ""}
-def compute_stats_m1(*args, **kwargs) -> Tuple[float, float]:
+def compute_elppd_stats(*args, **kwargs) -> Tuple[float, float]:
     """
     Wrapper around `draw_Elogp_samples` which returns the statistics of the
     samples instead of the samples themselves. Partly provided for compatibility
@@ -428,7 +433,7 @@ def compute_stats_m1(*args, **kwargs) -> Tuple[float, float]:
 # data = true_gen(L)
 
 # + tags=["active-ipynb"] editable=true slideshow={"slide_type": ""}
-# compute_stats_m1(data, theory_logp, theory_gen(1000),
+# compute_elppd_stats(data, theory_logp, theory_gen(1000),
 #                  c=1, N=50, R=100)
 
 # + editable=true slideshow={"slide_type": ""} tags=["active-ipynb"]
@@ -446,7 +451,7 @@ def compute_stats_m1(*args, **kwargs) -> Tuple[float, float]:
 #
 # **Return**
 #
-# - $\Bemd\bigl(\Elmu{A}, \Elsig{A}, \Elmu{B}, \Elsig{B}\bigr)$, where the moments are given by `compute_logp_cumulants`.
+# - $\Bemd\bigl(\Elmu{A}, \Elsig{A}, \Elmu{B}, \Elsig{B}\bigr)$, where the moments are given by `compute_elppd_stats`.
 
 # +
 def mp_wrapper(f: Callable, *args, out: "mp.queues.Queue", **kwargs):
@@ -549,11 +554,11 @@ def Bemd(data: "array_like",
         logpB = partial(logpB, **kwds)
     
     if not use_multiprocessing:
-        μA, ΣA = compute_logp_cumulants(
+        μA, ΣA = compute_elppd_stats(
             data, logpA, model_samplesA, model_ppf=model_ppfA,
             c=c, res=res, N=N, R=R, relstderr_tol=relstderr_tol,
             path_progbar=progbarA)
-        μB, ΣB = compute_logp_cumulants(
+        μB, ΣB = compute_elppd_stats(
             data, logpB, model_samplesB, model_ppf=model_ppfA,
             c=c, res=res, N=N, R=R, relstderr_tol=relstderr_tol,
             path_progbar=progbarB)
@@ -563,19 +568,19 @@ def Bemd(data: "array_like",
         progqB = mp.Queue() if progbarA is not None else None  # progress updates from the function
         outqA = mp.Queue()   # Function output values are returned via a Queue
         outqB = mp.Queue()
-        _compute_stats_m1_A = partial(
-            compute_stats_m1,
+        _compute_elppd_stats_A = partial(
+            compute_elppd_stats,
             data, logpA, model_samplesA, model_ppf=model_ppfA,
             c=c, res=res, N=N, R=R, relstderr_tol=relstderr_tol,
             path_progbar=progqA)
-        _compute_stats_m1_B = partial(
-            compute_stats_m1,
+        _compute_elppd_stats_B = partial(
+            compute_elppd_stats,
             data, logpB, model_samplesB, model_ppf=model_ppfB,
             c=c, res=res, N=N, R=R, relstderr_tol=relstderr_tol,
             path_progbar=progqB)
-        pA = mp.Process(target=mp_wrapper, args=(_compute_stats_m1_A,),
+        pA = mp.Process(target=mp_wrapper, args=(_compute_elppd_stats_A,),
                         kwargs={'path_progbar': progqA, 'out': outqA})
-        pB = mp.Process(target=mp_wrapper, args=(_compute_stats_m1_B,),
+        pB = mp.Process(target=mp_wrapper, args=(_compute_elppd_stats_B,),
                         kwargs={'path_progbar': progqB, 'out': outqB})
         pA.start()
         pB.start()

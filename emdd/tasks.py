@@ -14,7 +14,7 @@
 #     name: emd-paper
 # ---
 
-# %% editable=true slideshow={"slide_type": ""}
+# %% editable=true slideshow={"slide_type": ""} tags=["hide-input"]
 from __future__ import annotations
 
 # %% [markdown]
@@ -169,7 +169,7 @@ def update_random_state(model, new_rngstate) -> "Model":
     return model            
 
 
-# %%
+# %% editable=true slideshow={"slide_type": ""}
 def compute_Bemd(models_c, Ldata, Ltheo, seeds):
     """
     Wrapper for `emdd.Bemd`:
@@ -203,14 +203,14 @@ def compute_Bemd(models_c, Ldata, Ltheo, seeds):
     xdata = MX(Ldata)
     zdata = Mtrue_phys(xdata)
     ydata = Mtrue_obs(xdata, zdata)
-    data = np.vstack((ydata, ydata))
+    data = np.vstack((xdata, ydata))
 
     # Generate samples to estimate model quantile functions
     x = MX(Ltheo)
     zA = MA_phys(x)    ; zB = MB_phys(x)
     yA = MA_obs(x, zA) ; yB = MB_obs(x, zB)
-    samplesA = np.vstack((yA, x))
-    samplesB = np.vstack((yB, x))
+    samplesA = np.vstack((x, yA))
+    samplesB = np.vstack((x, yB))
 
     # Silence sampling warnings: Calibration involves evaluating Bemd for models far from the data distribution, which require more
     # than 1000 path samples to evaluate the path integral within the default margin.
@@ -227,7 +227,7 @@ def compute_Bemd(models_c, Ldata, Ltheo, seeds):
     # Reset logging level as it was before
     emdlogger.setLevel(emdlogginglevel)
 
-# %%
+# %% editable=true slideshow={"slide_type": ""}
 def compute_Bconf(MX, Mtrue, MA, MB, Linf, seeds):
     """Compute the true Bconf (using a quasi infinite number of samples)"""
 
@@ -400,16 +400,29 @@ class Calibrate:
 # %% [markdown]
 # Run the experiments. Since there are a lot of them, and they each take a few minutes, we use multiprocessing to do this in reasonable time.  
 
-        # %%
-        with mp.Pool(ncores) as pool:
-            # Chunk size calculated following Pool's algorithm (See https://stackoverflow.com/questions/53751050/multiprocessing-understanding-logic-behind-chunksize/54813527#54813527)
-            # (Naive approach would be total/ncores. This is most efficient if all taskels take the same time. Smaller chunks == more flexible job allocation, but more overhead)
-            chunksize, extra = divmod(N, ncores*6)
-            if extra:
-                chunksize += 1
-            Bemd_it = pool.imap(compute_Bemd_partial,
-                                self.models_c_gen(Bemd_results, Bconf_results),
-                                chunksize=chunksize)
+        # %% editable=true slideshow={"slide_type": ""}
+        if ncores > 1:
+            with mp.Pool(ncores) as pool:
+                # Chunk size calculated following Pool's algorithm (See https://stackoverflow.com/questions/53751050/multiprocessing-understanding-logic-behind-chunksize/54813527#54813527)
+                # (Naive approach would be total/ncores. This is most efficient if all taskels take the same time. Smaller chunks == more flexible job allocation, but more overhead)
+                chunksize, extra = divmod(N, ncores*6)
+                if extra:
+                    chunksize += 1
+                Bemd_it = pool.imap(compute_Bemd_partial,
+                                    self.models_c_gen(Bemd_results, Bconf_results),
+                                    chunksize=chunksize)
+                for (models, c), Bemd_res in zip(                                     # NB: Both `models_c_gen` generators
+                        self.models_c_gen(Bemd_results, Bconf_results),               # always yield the same tuples,
+                        Bemd_it):                                                     # because we only update Bemd_results
+                    progbar.update(1)        # Updating first more reliable w/ ssh    # after drawing from the second generator
+                    Bemd_results[models, c] = Bemd_res
+                    if models not in Bconf_results:
+                        Bconf_results[models] = compute_Bconf(*models, Linf, seeds=SeedGen((entropy, "Bconf")))
+
+        # %% editable=true slideshow={"slide_type": ""}
+        else:
+            Bemd_it = (compute_Bemd_partial(arg)
+                       for arg in self.models_c_gen(Bemd_results, Bconf_results))
             for (models, c), Bemd_res in zip(                                     # NB: Both `models_c_gen` generators
                     self.models_c_gen(Bemd_results, Bconf_results),               # always yield the same tuples,
                     Bemd_it):                                                     # because we only update Bemd_results
@@ -418,6 +431,7 @@ class Calibrate:
                 if models not in Bconf_results:
                     Bconf_results[models] = compute_Bconf(*models, Linf, seeds=SeedGen((entropy, "Bconf")))
 
+        # %% editable=true slideshow={"slide_type": ""}
         progbar.close()
 
 # %% [markdown]
