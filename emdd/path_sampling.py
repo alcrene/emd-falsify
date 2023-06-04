@@ -14,7 +14,7 @@
 #     name: emd-paper
 # ---
 
-# %% [markdown]
+# %% [markdown] tags=["remove-cell"]
 # ---
 # math:
 #   '\lnLtt': '{\tilde{l}}'
