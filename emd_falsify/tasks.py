@@ -38,6 +38,7 @@ from __future__ import annotations
 from .config import config  # Python script
 
 # %% editable=true slideshow={"slide_type": ""}
+import abc
 import psutil
 import logging
 import time
@@ -45,7 +46,7 @@ import multiprocessing as mp
 import numpy as np
 from functools import partial
 from itertools import repeat
-from typing import Optional, Union, Any, Callable, Dict, Tuple, List, Iterable, NamedTuple
+from typing import Optional, Union, Any, Callable, Dict, Tuple, List, Iterable, NamedTuple, Literal
 from dataclasses import dataclass, is_dataclass, replace
 from scityping import Serializable, Dataclass, Type
 from tqdm.auto import tqdm
@@ -63,7 +64,44 @@ import emd_falsify as emd
 logger = logging.getLogger(__name__)
 
 # %%
-__all__ = ["Calibrate", "CalibrateKey", "CalibrateOutput"]
+__all__ = ["Calibrate", "CalibrationDist", "CalibrateKey", "CalibrateOutput"]
+
+
+# %% [markdown]
+# ## Calibration distribution
+
+# %% editable=true slideshow={"slide_type": ""}
+@dataclass(frozen=True)
+class CalibrationDist(abc.ABC):
+    """Generic template for a calibration distribution:
+    
+    in effect a calibration distribution with no calibration parameters.
+    For actual use you need to subclass `CalibrationDist` and extend it with 
+    parameters relevant to your models.
+    
+    .. Note:: Any subclass must have the `@dataclass(frozen=True)` decorator.
+
+    .. Note:: Subclass arguments are always appended, so the first argument
+       to a `CalibrationDist` is always `N`.
+    """
+    N: int|Literal[np.inf]     # Number of data models, i.e. length of iterator   
+    
+    @abc.abstractmethod
+    def __iter__(self):
+        raise NotImplementedError
+        # rng = get_rng("entropy using dist parameters")
+        # for n in range(self.N):
+        #     yield "different data models using `rng`"
+
+    def __len__(self):
+        return self.N
+    
+    def generate(self, N: int):
+        """Return a copy of CalibrationDist which will yield `N` models.
+        
+        :param:N: Number of models to return.
+        """
+        return replace(self, N=N)
 
 
 # %% [markdown]
@@ -100,19 +138,6 @@ __all__ = ["Calibrate", "CalibrateKey", "CalibrateOutput"]
 #
 # In contrast, a `@PureFunction` is pickled by serializing its code (after removing comments and whitespace). Therefore as long as the function definition is the same, we can copy code to another notebook/script and the cache will still be found.
 # :::
-
-# %%
-@PureFunction
-def logp_theo(xy, logp_obs):
-    x, y = xy
-    return logp_obs(y, x)
-
-# TODO: Version with support for stochastic physical model
-# @PureFunction
-# def logp_theo(xzy, logp_obs, logp_phys=None):
-#     x, z, y = xzy
-#     return logp_obs(y, x) + logp_phys(z, x)
-
 
 # %% [markdown]
 # #### Functions for the calibration experiment
@@ -284,9 +309,9 @@ class Calibrate:
         self,
         c_list     : List[float],
         #data_models: Sequence[PureFunction],
-        data_models: Any,
-        riskA      : PureFunction,
-        riskB      : PureFunction,
+        data_models: Dataclass,
+        riskA      : Union[Dataclass,PureFunction],  # We also allow dataclasses because those can
+        riskB      : Union[Dataclass,PureFunction],  # sometimes better serialize complex args
         synth_risk_ppfA  : Union[emd.interp1d, PureFunction],
         synth_risk_ppfB  : Union[emd.interp1d, PureFunction],
         Ldata      : int,
