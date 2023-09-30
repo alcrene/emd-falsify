@@ -3,7 +3,7 @@ import numpy as np
 from scipy import stats
 import pytest
 
-from emdd.utils import ParamColl, expand
+from emd_falsify.utils import ParamColl, expand
 
 def test_ParamColl():
 
@@ -140,7 +140,7 @@ def test_ParamColl_reproducible():
     )
     s = str([dict(**p) for p in model_params.inner(1)])
 
-    fname = "emdd-test-paramcoll-reproducible.txt"
+    fname = "emd_falsify-test-paramcoll-reproducible.txt"
     try:
         with open(fname, 'r') as f:
             s2 = f.read()

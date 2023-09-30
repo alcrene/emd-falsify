@@ -6,5 +6,6 @@ build
 *.pytest_cache
 
 labnotes
+purgatory
 project.cfg
 test/*.txt

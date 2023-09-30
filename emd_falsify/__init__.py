@@ -12,13 +12,17 @@ Things to ensure are always done:
 # from pathlib import Path
 # import logging
 from .config import Config, config
+from . import utils
 
 def __getattr__(attr):
-    if attr == "Bemd":
-        from .emd import Bemd
-        return Bemd
+    if attr in { "interp1d", "make_empirical_risk_ppf", "draw_R_samples", "Bemd"}:
+        from . import emd
+        return getattr(emd, attr)
+    # elif attr == "Calibrate":
+    #     from . import tasks
+    #     return tasks.Calibrate
     else:
-        raise AttributeError(f"Module `emdd` does not define '{attr}'.")
+        raise AttributeError(f"Module `emd_falsify` does not define '{attr}'.")
 # import smttask
 # from smttask.view import RecordStoreView
 

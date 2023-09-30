@@ -24,13 +24,12 @@
 #   '\Mvar' : '{\mathop{\mathrm{Mvar}}}'
 #   '\Beta' : '{\mathop{\mathrm{Beta}}}'
 #   '\pathP': '{\mathop{\mathcal{P}}}'
+#   '\lnLh' : '{\hat{l}}'
+#   '\emdstd': '{\tilde{σ}}'
+#   '\EMD'  : '{\mathrm{EMD}}'
 # ---
-#
-# $\renewcommand{\lnLh}[1][]{\hat{l}_{#1}}
-# \renewcommand{\emdstd}[1][]{\tilde{σ}_{{#1}}}
-# \renewcommand{\EMD}[1][]{{\mathrm{EMD}}_{#1}}$
 
-# %% [markdown]
+# %% [markdown] editable=true slideshow={"slide_type": ""}
 # (supp_path-sampling)=
 # # Sampling quantile paths
 
@@ -39,6 +38,9 @@
 # {{ prolog }}
 # %{{ startpreamble }}
 # %{{ endpreamble }}
+#
+# $\renewcommand{\lnLh}[1][]{\hat{l}_{#1}}
+# \renewcommand{\emdstd}[1][]{\tilde{σ}_{{#1}}}
 # ```
 
 # %% tags=["active-ipynb", "remove-cell"]
@@ -60,22 +62,23 @@ import scipy.optimize
 #from scipy.optimize import root, brentq
 from tqdm.auto import tqdm
 
+from collections.abc import Callable
 from typing import Optional, Union, Literal, Tuple, Generator
 from scityping import Real
 from scityping.numpy import Array, Generator as RNGenerator
 
-from emdd.digitize import digitize  # Used to improve numerical stability when finding Beta parameters
+from emd_falsify.digitize import digitize  # Used to improve numerical stability when finding Beta parameters
 
 # %% [markdown] tags=["remove-cell"]
 # Notebook-only imports
 
-# %% tags=["active-ipynb", "hide-input"]
+# %% tags=["active-ipynb", "hide-input"] editable=true slideshow={"slide_type": ""}
 # import itertools
 # import scipy.stats
 # import holoviews as hv
 # from myst_nb import glue
 #
-# from emdd.utils import GitSHA
+# from emd_falsify.utils import GitSHA
 # from config import config  # Uses config from CWD
 #
 # hv.extension(config.figures.backend)
@@ -112,7 +115,7 @@ logger = logging.getLogger(__name__)
 # with $α$ and $β$ parameters to be determined.
 
 # %% [markdown]
-# :::{IMPORTANT}  
+# :::{important}  
 # An essential property of a stochastic process is *consistency*: it must not matter exactly how we discretize the interval {cite:p}`gillespieMathematicsBrownianMotion1996`. Let $\{\lnLh\}^{(n)}$ denote the steps which are added when we refine the discretization from steps of $2^{-n+1}$ to steps of $2^{-n}$:
 # $$\{\lnLh\}^{(n)} := \bigl\{\lnLh(k\cdot 2^{-n}) \,\big|\, k=1,3,\dotsc,2^n \bigr\} \,.$$ (eq_added-steps)
 # A necessary condition for consistency is that coarsening the discretization from steps of $2^{-n}$ to steps of $2^{-n+1}$ (i.e. marginalizing over the points at $\{\lnLh\}^{(n)}$) does not substantially change the probability law:
@@ -130,16 +133,16 @@ logger = logging.getLogger(__name__)
 # ### Conditions for choosing the beta parameters
 #
 # :::{margin}
-# Recall that in {numref}`sec_integrating-Me`, we made the assumption that the variability of the path process $\pathP$ should determined by $\EMD$, up to some constant $c$. This constant is determined by a calibration experiment.
-# To keep expressions concise, in this section we use $\emdstd(Φ) := c \EMD(Φ)$.
+# Recall that in {numref}`sec_integrating-Me`, we made the assumption that the variability of the path process $\pathP$ should determined by $δ^{\EMD}$, up to some constant $c$. This constant is determined by a calibration experiment.
+# To keep expressions concise, in this section we use $\emdstd(Φ) := c δ^{\EMD}(Φ)$.
 # :::
-# To draw an increment $Δ l_{2^{-n}}$, we need to convert $\lnLtt(Φ)$ and $\emdstd(Φ) := c \EMD(Φ)$ into beta distribution parameters $α$ and $β$. If $x_1$ follows a beta distribution, then its first two cumulants are given by
+# To draw an increment $Δ l_{2^{-n}}$, we need to convert $\lnLtt(Φ)$ and $\emdstd(Φ) := c δ^{\EMD}(Φ)$ into beta distribution parameters $α$ and $β$. If $x_1$ follows a beta distribution, then its first two cumulants are given by
 # $$\begin{aligned}
 # x_1 &\sim \Beta(α, β) \,, \\
 # \EE[x_1] &= \frac{α}{α+β} \,, \\
 # \VV[x_1] &= \frac{αβ}{(α+β)^2(α+β+1)} \,. \\
 # \end{aligned}$$
-# However, as discussed by Mateu-Figueras et al. (2021, 2011), to properly account for the geometry of a simplex, one should consider instead statistics with respect to the Aitchison measure, sometimes referred to as the *center* and *metric variance*. Defining $x_2 = 1-x_1$, these can be written (Mateu-Figueras et al., 2021)
+# However, as discussed by Mateu-Figueras et al. (2021, 2011), to properly account for the geometry of a simplex, one should use instead statistics with respect to the Aitchison measure, sometimes referred to as the *center* and *metric variance*. Defining $x_2 = 1-x_1$, these can be written (Mateu-Figueras et al., 2021)
 # $$\begin{align}
 # \EE_a[(x_1, x_2)] &= \frac{1}{e^{ψ(α)} + e^{ψ(β)}} \bigl[e^{ψ(α)}, e^{ψ(β)}\bigr] \,, \label{eq_Aitchison-moments__EE} \\
 # \Mvar[(x_1, x_2)] &= \frac{1}{2} \bigl(ψ_1(α) + ψ_1(β)\bigr) \,. \label{eq_Aitchison-moments__Mvar}
@@ -160,7 +163,7 @@ logger = logging.getLogger(__name__)
 
 # %% [markdown]
 # We now choose to define the parameters $α$ and $β$ via the following relations:
-# :::{admonition}
+# :::{admonition} &nbsp;
 # :class: important
 #
 # $$\begin{aligned}
@@ -172,7 +175,12 @@ logger = logging.getLogger(__name__)
 # %% [markdown]
 # These follow from interpretating $\lnLtt$ and $\emdstd$ as estimators for the center and square root of the metric variance.
 # We use $=^*$ to indicate equality in spirit rather than true equality, since strictly speaking, these are 3 equations for 2 unknown. To reduce the $\EE_a$ equations to one, we use instead
+#
+# :::{admonition} &nbsp;
+# :class: important
+#
 # $$\frac{\EE_a\bigl[Δ l_{2^{-n}}\bigl(Φ\bigr)\bigr]}{\EE_a \bigl[Δ l_{2^{-n}}\bigl(Φ+2^{-n}\bigr)\bigr]} \stackrel{!}{=} \frac{\lnLtt\bigl(Φ+2^{-n}\bigr) - \lnLtt\bigl(Φ\bigr)}{\lnLtt\bigl(Φ+2^{-n+1}\bigr) - \lnLtt\bigl(Φ+2^{-n}\bigr)} \,.$$ (eq_defining_conditions-b)
+# :::
 
 # %% [markdown]
 # **Remarks**
@@ -191,7 +199,7 @@ logger = logging.getLogger(__name__)
 
 # %% [markdown]
 # Define
-# :::{admonition}
+# :::{admonition} &nbsp;
 # :class: important
 #
 # $$\begin{align}
@@ -763,7 +771,7 @@ def draw_from_beta(r: Union[Real,Array[float,1]],
 # - As a further consequence, we also can’t use `vmap` to vectorize `_draw_from_beta`, since it needs to trace through the function.
 # - **Current verdict** As it stands, JAX adds complexity with no gain. To make it worthwhile, one would need either need to at least implement a jittable multivariate solver, and then see if by jitting the whole function we obtain meaningful improvement.
 #   + `jaxopt` is written using [`lax.custom_root`](https://jax.readthedocs.io/en/latest/_autosummary/jax.lax.custom_root.html#jax.lax.custom_root). Possibly this could also be useful.
-#   + Alternatively, perhaps one can rework the problem so that finding the $α, β$ pair does not require solving a 2-d optimization problem, but some other time of problem for which `jaxopt` has a jittable function.
+#   + Alternatively, perhaps one can rework the problem so that finding the $α, β$ pair does not require solving a 2-d optimization problem, but some other type of problem for which `jaxopt` has a jittable function.
 # :::
 
 # %% tags=["remove-cell", "active-ipynb"]
@@ -1152,7 +1160,7 @@ def draw_from_beta(r: Union[Real,Array[float,1]],
 # time_table.opts(aspect=4, fig_inches=7)
 # ```
 
-# %% [markdown] tags=["remove-cell"]
+# %% [markdown] tags=["remove-cell"] editable=true slideshow={"slide_type": ""}
 # | # fits |              loop |        vectorized |
 # |-------:|------------------:|------------------:|
 # |      1 |  474 μs ± 12.3 μs |  452 μs ± 2.62 μs |
@@ -1170,77 +1178,88 @@ def draw_from_beta(r: Union[Real,Array[float,1]],
 # Now that we know how to construct an sampling distribution for the increments, sampling an entire path is just a matter of repeating the process recursively until we reach the desired resolution.
 
 # %%
-def generate_path_binary_partition(
-        Phi: Array[float,1], ltilde: Array[float,1], sigmatilde: Array[float,1],
-        lstart: float, lend: float, res: int=7, rng=None
+def generate_path_hierarchical_beta(
+        qstar: Callable, deltaEMD: Callable, c: float,
+        qstart: float, qend: float, res: int=7, rng=None,
+        *, Phistart: float=0., Phiend: float=1.
     ) -> Tuple[Array[float,1], Array[float,1]]:
     """
     Returned path has length ``2**res + 1``.
-    If `ltilde` and`sigmatilde` have a different length, they are linearly-
+    If `qstar` and`Mvar` have a different length, they are linearly-
     interpolated to align with the returned array `Φhat`.
     
     Parameters
     ----------
-    Phi: Values of Φ at which `ltilde` and `sigmatilde` are evaluated.
-    ltilde: Best guess for true likelihood path. The generated path will
-       be centered on this trace.
-    sigmatilde: Vector of scaled EMD values. (I.e. {math}`c \mathrm{EMD}`.)
+    qstar: Empirical (mixed) quantile function. The generated path will
+       be centered on this trace. Although any callable mapping [0, 1] to R
+       is accepted, in all practical use cases this will be the output of
+       :func:`emd.make_empirical_risk_ppf`.
+    deltaEMD: Callable returning discrepancy values (i.e. {math}`δ^\mathrm{EMD}`).
+       Like `qstar`, this must map [0, 1] to R+.
+    c: Proportionality constant relating δEMD to
+       the square root of the metric variance.
+    qstart, qend: The end point ordinates. The hierarchical beta process "fills in"
+       the space between a start and an end point, but it needs the value of _q_
+       to be given at those points. These end points are by default Φ=0 and Φ=1,
+       which correspond to the bounds of a quantile function.
     res: Returned paths have length ``2**res``.
        Typical values of `res` are 6, 7 and 8, corresponding to paths of length
        64, 128 and 256. Smaller may be useful to accelerate debugging. Larger values
        increase the computation cost with typically negligible improvements in accuracy.
-    seed: Any argument accepted by `numpy.random.default_rng` to initialize an RNG.
+    rng: Any argument accepted by `numpy.random.default_rng` to initialize an RNG.
+    Phistart, Phiend: (Keyword only) The abscissa corresponding to the ordinates
+       `qstart` and `qend`. The default values are 0 and 1, appropriate for generating
+       a quantile function.
     
     Returns
     -------
-    The pair Φhat, lhat.
+    The pair Φhat, qhat.
         Φhat: Array of equally spaced values between 0 and 1, with step size ``2**-res``.
-        lhat: The generated path, evaluated at the values listed in `Φhat`.
+        qhat: The generated path, evaluated at the values listed in `Φhat`.
     """
     # Validation
     res = int(res)
-    if not (len(Phi) == len(ltilde) == len(sigmatilde)):
-        raise ValueError("`Phi`, `ltilde` and `sigmatilde` must all have "
-                         "the same shape. Values received have the respective shapes "
-                         f"{np.shape(Phi)}, {np.shape(ltilde)}, {np.shape(sigmatilde)}")
+    if Phistart >= Phiend:
+        raise ValueError("`Phistart` must be strictly smaller than `Phiend`. "
+                         f"Received:\n  {Phistart=}\n  {Phiend=}")
+    # if not (len(Phi) == len(qstar) == len(Mvar)):
+    #     raise ValueError("`Phi`, `qstar` and `Mvar` must all have "
+    #                      "the same shape. Values received have the respective shapes "
+    #                      f"{np.shape(Phi)}, {np.shape(qstar)}, {np.shape(Mvar)}")
     if res <= 1:
         raise ValueError("`res` must be greater than 1.")
     rng = np.random.default_rng(rng)  # No-op if `rng` is already a Generator
     # Interpolation
     N  = 2**res + 1
-    Φhat = np.linspace(Phi[0], Phi[-1], N)
-    if not np.array_equal(Phi, Φhat):  # NB: This condition doesn't depend on Phi being sorted or regularly spaced
-        ltilde = np.interp(Φhat, Phi, ltilde)
-        sigmatilde = np.interp(Φhat, Phi, sigmatilde)
+    Φarr = np.linspace(Phistart, Phiend, N)
+    qsarr = qstar(Φarr)
     # Pre-computations
-    sigma2tilde = sigmatilde**2
+    Mvar = c * deltaEMD(Φarr)**2
     # Algorithm
-    lhat = np.empty(N)
-    lhat[0] = lstart
-    lhat[-1] = lend
+    qhat = np.empty(N)
+    qhat[0] = qstart
+    qhat[-1] = qend
     for n in range(1, res+1):
         Δi = 2**(res-n)
         i = np.arange(Δi, N, 2*Δi)  # Indices for the new values to insert
-        d = lhat[i+Δi] - lhat[i-Δi] # Each pair of increments must sum to `d`
-        r = (ltilde[i] - ltilde[i-Δi]) / (ltilde[i+Δi]-ltilde[i])  # Ratio of first/second increments
-        v = 2*sigma2tilde[i]
+        d = qhat[i+Δi] - qhat[i-Δi] # Each pair of increments must sum to `d`
+        r = (qsarr[i] - qsarr[i-Δi]) / (qsarr[i+Δi]-qsarr[i])  # Ratio of first/second increments
+        v = 2*Mvar[i]
         x1 = draw_from_beta(r, v, rng=rng)
-        lhat[i] = lhat[i-Δi] + d * x1
-    return Φhat, lhat
+        qhat[i] = qhat[i-Δi] + d * x1
+    return Φarr, qhat
 
 
-# %% tags=["active-ipynb", "hide-input"]
-# Φtilde = np.linspace(0.01, 1, 20)
-# ltilde = np.log(Φtilde)
-# σtilde = 0.5*np.ones_like(Φtilde)
-# Φhat, lhat = generate_path_binary_partition(
-#     Φtilde, ltilde, 3*σtilde, lstart=np.log(Φtilde[0]), lend=np.log(Φtilde[-1]),
-#     res=8, rng=None)
+# %% tags=["active-ipynb", "hide-input"] editable=true slideshow={"slide_type": ""}
+# qstar = np.log
+# σtilde = lambda Φ: 1.5*np.ones_like(Φ)
+# Φhat, qhat = generate_path_hierarchical_beta(
+#     qstar, σtilde, c=1, qstart=np.log(0.01), qend=np.log(1),
+#     res=8, rng=None, Phistart=0.01)  # Can’t start at zero precisely because log(0) is undefined
 #
-# cycle = config.figures.colors.bright.cycle
-# curve_ltilde = hv.Curve(zip(Φtilde, ltilde), label=r"$\tilde{l}$", kdims=["Φ"])
-# curve_lhat = hv.Curve(zip(Φhat, lhat), label=r"$\hat{l}$", kdims=["Φ"])
-# fig = curve_ltilde.opts(color=cycle[0]) * curve_lhat.opts(color=cycle[1])
+# Φarr = np.linspace(0.01, 1, 20)
+# curve_qstar = hv.Curve(zip(Φarr, qstar(Φarr)), label=r"$\tilde{l}$", kdims=["Φ"])
+# curve_qhat = hv.Curve(zip(Φhat, qhat), label=r"$\hat{l}$", kdims=["Φ"])
 # fig.opts(ylabel="")
 
 # %% [markdown]
@@ -1251,24 +1270,22 @@ def generate_path_binary_partition(
 #
 # To generate $R$ paths, we repeat the following $R$ times:
 # 1. Select start and end points by sampling $\nN(\tilde{Φ}[0], \lnLtt{}[0])$ and $\nN(\tilde{Φ}[-1], \lnLtt{}[-1])$.
-# 2. Call `generate_path_binary_partition`.
+# 2. Call `generate_path_hierarchical_beta`.
 
-# %%
-def generate_quantile_paths(R: int, Phi: Array[float,1],
-                            ltilde: Array[float,1], sigmatilde: Array[float,1],
-                            res: int=7, seed=None,
-                            *, progbar: Union[Literal["auto"],None,tqdm,"mp.queues.Queue"]="auto",
-                            previous_R: int=0
+# %% editable=true slideshow={"slide_type": ""} tags=["remove-cell"]
+def generate_quantile_paths(qstar: Callable, deltaEMD: Callable, c: float,
+                            M: int, res: int=7, rng=None,
+                            *, Phistart: float=0., Phiend: float=1,
+                            progbar: Union[Literal["auto"],None,tqdm,"mp.queues.Queue"]="auto",
+                            previous_M: int=0
                            ) -> Generator[Tuple[Array[float,1], Array[float,1]], None, None]:
     """
-    Generate `R` distinct quantile paths, with trajectory and variability determined
-    by `ltilde` and `sigmatilde`.
-    Paths are generated using the binary partition algorithm, with normal distributions
+    Generate `M` distinct quantile paths, with trajectory and variability determined
+    by `qstar` and `deltaEMD`.
+    Paths are generated using the hierarchical beta algorithm, with normal distributions
     for the end points and beta distributions for the increments.
     
     Returned paths have length ``2**res + 1``.
-    If `ltilde` and`sigmatilde` have a different length, they are linearly-
-    interpolated to align with the returned array `Φhat`.
     Typical values of `res` are 6, 7 and 8, corresponding to paths of length
     64, 128 and 256. Smaller values may be useful to accelerate debugging. Larger values
     increase the computation cost with (typically) negligible improvements in accuracy.
@@ -1278,75 +1295,79 @@ def generate_quantile_paths(R: int, Phi: Array[float,1],
     
     Parameters
     ----------
-    R: Number of paths to generate.
-    Phi: Values of Φ at which `ltilde` and `sigmatilde` are evaluated.
-    ltilde: Best guess for true likelihood path. The generated path will
-       be centered on this trace.
-    sigmatilde: Vector of scaled EMD values. (I.e. {math}`c \mathrm{EMD}`.)
+    qstar: Empirical (mixed) quantile function. The generated paths will
+       be centered on this trace. Although any callable mapping [0, 1] to R
+       is accepted, in all practical use cases this will be the output of
+       :func:`emd.make_empirical_risk_ppf`.
+    deltaEMD: Callable returning scaled discrepancy values
+       (i.e. {math}`δ^\mathrm{EMD}`). Like `qstar`, this must map [0, 1] to R+.
+    c: Proportionality constant relating δEMD to
+       the square root of the metric variance.
+    M: Number of paths to generate.
     res: Returned paths have length ``2**res + 1``.
        Typical values of `res` are 6, 7 and 8, corresponding to paths of length
        64, 128 and 256. Smaller may be useful to accelerate debugging, but larger
        values are unlikely to be useful.
-    seed: Any argument accepted by `numpy.random.default_rng` to initialize an RNG.
+    rng: Any argument accepted by `numpy.random.default_rng` to initialize an RNG.
     progbar: Control whether to create a progress bar or use an existing one.
        - With the default value 'auto', a new tqdm progress is created.
          This is convenient, however it can lead to many bars being created &
          destroyed if this function is called within a loop.
        - To prevent this, a tqdm progress bar can be created externally (e.g. with
          ``tqdm(desc="Generating paths")``) and passed as argument.
-         Its counter will be reset to zero, and its set total to `R` + `previous_R`.
+         Its counter will be reset to zero, and its set total to `M` + `previous_M`.
        - (Multiprocessing): To support updating progress bars within child processes,
          a `multiprocessing.Queue` object can be passed, in which case no
          progress bar is created or updated. Instead, each time a quantile path
          is sampled, a value is added to the queue with ``put``. This way, the
          parent process can update a progress by consuming the queue; e.g.
          ``while not q.empty(): progbar.update()``.
-         The value added to the queue is `R`+`previous_R`, which can be
+         The value added to the queue is `M`+`previous_M`, which can be
          used to update the total value of the progress bar.
        - A value of `None` prevents displaying any progress bar.
 
-    previous_R: Used only to improve the display of the progress bar:
-       the indicated total on the progress bar will be `R` + `previous_R`.
-       Use this when adding paths to an 
+    previous_M: Used only to improve the display of the progress bar:
+       the indicated total on the progress bar will be `M` + `previous_M`.
+       Use this when adding paths to a preexisting ensemble.
 
     Yields
     ------
-    Tuples of two 1-d arrays: (Φhat, lhat).
+    Tuples of two 1-d arrays: (Φhat, qhat).
     
     Notes
     -----
     Returned paths always have an odd number of steps, which as a side benefit is
     beneficial for integration with Simpson's rule.
     """
-    rng = np.random.default_rng(seed)
-    total = R + previous_R
+    rng = np.random.default_rng(rng)
+    total = M + previous_M
     progbar_is_queue = ("multiprocessing.queues.Queue" in str(type(progbar).mro()))  # Not using `isinstance` avoids having to import multiprocessing & multiprocessing.queues
     if isinstance(progbar, str) and progbar == "auto":
         progbar = tqdm(desc="Sampling quantile paths", leave=False,
                        total=total)
     elif progbar is not None and not progbar_is_queue:
         progbar.reset(total)
-        if previous_R:
+        if previous_M:
             # Dynamic miniters don’t work well with a restarted prog bar: use whatever miniter was determined on the first run (or 1)
             progbar.miniters = max(progbar.miniters, 1)
             progbar.dynamic_miniters = False
-            progbar.n = previous_R
+            progbar.n = previous_M
             progbar.refresh()
-    for r in range(R):
+    for r in range(M):
         for _ in range(100):  # In practice, this should almost always work on the first try; 100 failures would mean a really pathological probability
-            lstart  = rng.normal(ltilde[0] , sigmatilde[0])
-            lend = rng.normal(ltilde[-1], sigmatilde[-1])
-            if lstart < lend:
+            qstart  = rng.normal(qstar(Phistart) , c*deltaEMD(Phistart))
+            qend = rng.normal(qstar(Phiend), c*deltaEMD(Phiend))
+            if qstart < qend:
                 break
         else:
             raise RuntimeError("Unable to generate start and end points such that "
-                               "start < end. Are you sure `ltilde` is compatible "
+                               "start < end. Are you sure `qstar` is compatible "
                                "with monotone paths ?")
-        Φhat, lhat = generate_path_binary_partition(
-            Phi, ltilde, sigmatilde, lstart=lstart, lend=lend,
-            res=res, rng=rng)
+        Φhat, qhat = generate_path_hierarchical_beta(
+            qstar, deltaEMD, c, qstart=qstart, qend=qend,
+            res=res, rng=rng, Phistart=Phistart, Phiend=Phiend)
         
-        yield Φhat, lhat
+        yield Φhat, qhat
         
         if progbar_is_queue:
             progbar.put(total)
@@ -1357,22 +1378,23 @@ def generate_quantile_paths(R: int, Phi: Array[float,1],
 # %% [markdown]
 # ### Usage example
 
-# %% tags=["active-ipynb"]
-# Φtilde = np.linspace(0.01, 1, 20)
-# ltilde = np.log(Φtilde)
-# σtilde = 0.5*np.ones_like(Φtilde)
+# %% tags=["active-ipynb", "hide-input"] editable=true slideshow={"slide_type": ""}
+# #Φtilde = np.linspace(0.01, 1, 20)
+# qstar = np.log
+# σtilde = lambda Φ: 1.5*np.ones_like(Φ)
 #
 # colors = cycle = config.figures.colors.bright
 #
-# curves_lhat = []
-# for Φhat, lhat in generate_quantile_paths(10, Φtilde, ltilde, 3*σtilde,
-#                                  res=8, seed=None):
-#     curves_lhat.append(hv.Curve(zip(Φhat, lhat), label=r"$\hat{l}$", kdims=["Φ"])
+# curves_qhat = []
+# for Φhat, qhat in generate_quantile_paths(
+#         qstar, σtilde, c=1, M=10, res=8, rng=None, Phistart=0.01):
+#     curves_qhat.append(hv.Curve(zip(Φhat, qhat), label=r"$\hat{l}$", kdims=["Φ"])
 #                        .opts(color=colors.grey))
-# curve_ltilde = hv.Curve(zip(Φtilde, ltilde), label=r"$\tilde{l}$", kdims=["Φ"]) \
+# Φtilde = np.linspace(0.01, 1, 20)
+# curve_qstar = hv.Curve(zip(Φtilde, qstar(Φtilde)), label=r"$\tilde{l}$", kdims=["Φ"]) \
 #                         .opts(color=colors.blue)
 #
-# hv.Overlay((*curves_lhat, curve_ltilde)).opts(ylabel="")
+# hv.Overlay((*curves_qhat, curve_qstar)).opts(ylabel="")
 
-# %% tags=["remove-input", "active-ipynb"]
+# %% tags=["remove-input", "active-ipynb"] editable=true slideshow={"slide_type": ""}
 # GitSHA()

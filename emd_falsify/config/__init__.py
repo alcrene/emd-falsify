@@ -84,8 +84,9 @@ class Config(ValConfig):
     scityping: ScitypingConfig={}
     
     @validator('scityping')
-    def add_emdd_safe_packages(scityping):
-        scityping.safe_packages |= {"emdd.models", "emdd.tasks"}
+    def add_emd_falsify_safe_packages(scityping):
+        scityping.safe_packages |= {"emd_falsify.tasks"}
+        # scityping.safe_packages |= {"emd_falsify.models", "emd_falsify.tasks"}
 
 
 # config = Config(Path(__file__).parent/"defaults.cfg",

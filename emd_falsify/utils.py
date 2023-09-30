@@ -68,7 +68,7 @@ def glue(name, variable, display=True, print_name=True,
     elif backend not in {"bokeh", "matplotlib"}:
         raise ValueError("config.backend should be either 'bokeh' or 'matplotlib'")
     
-    if print_name:   
+    if print_name:
         if IPython.get_ipython():
             IPython.display.display(name)  # Should look nicer in Jupyter Book, especially when there are multiple glue statements
         else:
