@@ -78,20 +78,29 @@ class CalibrationDist(abc.ABC):
     in effect a calibration distribution with no calibration parameters.
     For actual use you need to subclass `CalibrationDist` and extend it with 
     parameters relevant to your models.
-    
-    .. Note:: Any subclass must have the `@dataclass(frozen=True)` decorator.
 
-    .. Note:: Subclass arguments are always appended, so the first argument
-       to a `CalibrationDist` is always `N`.
+    Using this class is not actually required for the `Calibrate` task: any
+    frozen dataclass will do. The only requirements for the dataclass are:
+
+    - That iterating over it yields data models.
+    - That it defines `__len__`.
+    - That all its parameters are serializable.
+    - That it be created with ``frozen=True``.
+
+    Users can choose to subclass this class, or just use it as a template.
+
+    .. Note:: If subclassing, the first argument will always be `N` since
+       subclasses append their parameters to the base class.
     """
     N: int|Literal[np.inf]     # Number of data models, i.e. length of iterator   
     
     @abc.abstractmethod
     def __iter__(self):
         raise NotImplementedError
-        # rng = get_rng("entropy using dist parameters")
+        # rng = <create & seed an RNG using the dist parameters as entropy>
         # for n in range(self.N):
-        #     yield "different data models using `rng`"
+        #     <draw calibration params using rng>
+        #     yield <data model>
 
     def __len__(self):
         return self.N
@@ -326,9 +335,11 @@ class Calibrate:
         
         Parameters
         ----------
-        data_models: Iterable of data models to use for calibration. Each model yields
-            one (Bconf, Bemd) pair. If this iterable is sized, progress bars will
-            estimate the remaining compute time. 
+        data_models: Dataclass following the pattern of `CalibrationDist`.
+            Therefore also an iterable of data models to use for calibration.
+            See `CalibrationDist` for more details.
+            Each data model will result in one (Bconf, Bemd) pair in the output results.
+            If this iterable is sized, progress bars will estimate the remaining compute time.
             
         Ldata: Number of data points from the true model to generate when computing Bemd.
             This should be chosen commensurate with the size of the dataset that will be analyzed,
@@ -381,7 +392,7 @@ class Calibrate:
         ncores = min(ncores, total, config.mp.max_cores)
 
 # %% [markdown]
-# Run the experiments. Since there are a lot of them, and they each take a few minutes, we use multiprocessing to run multiple of them at once.  
+# Run the experiments. Since there are a lot of them, and they each take a few minutes, we use multiprocessing to run them in parallel.
 
         # %% editable=true slideshow={"slide_type": ""} tags=["skip-execution"]
         if ncores > 1:
@@ -433,6 +444,6 @@ class Calibrate:
         return UnpackedCalibrateResult(
             Bemd  = dict(zip(self.model_c_gen({},{}),
                              result.Bemd)),
-            Bconf = dict(zip(self.model_gen(),
+            Bconf = dict(zip(self.taskinputs.data_models,
                              result.Bconf))
         )
