@@ -81,7 +81,7 @@ from emd_falsify.digitize import digitize  # Used to improve numerical stability
 # from emd_falsify.utils import GitSHA
 # from config import config  # Uses config from CWD
 #
-# hv.extension(config.figures.backend)
+# hv.extension(config.viz.backend)
 
 # %% tags=["remove-cell"]
 logger = logging.getLogger(__name__)
@@ -659,7 +659,7 @@ def draw_from_beta(r: Union[Real,Array[float,1]],
 #              (2.271457193328191, 6.075242708902806e-08),
 #              (2.269182419251242, 6.794061846449025e-08),
 #             ],
-#         itertools.cycle(config.figures.colors.bright.cycle)):
+#         itertools.cycle(config.viz.colors.bright.cycle)):
 #     rv = get_beta_rv(r, v)
 #     if isinstance(rv.dist, scipy.stats.rv_discrete):
 #         # Dirac delta distribution
@@ -1383,7 +1383,7 @@ def generate_quantile_paths(qstar: Callable, deltaEMD: Callable, c: float,
 # qstar = np.log
 # σtilde = lambda Φ: 1.5*np.ones_like(Φ)
 #
-# colors = cycle = config.figures.colors.bright
+# colors = cycle = config.viz.colors.bright
 #
 # curves_qhat = []
 # for Φhat, qhat in generate_quantile_paths(

@@ -201,19 +201,19 @@ def get_bounds(*arrs, lower_margin=0.05, upper_margin=0.05) -> Tuple[float, floa
     return (low-lower_margin*width, high+upper_margin*width)
 
 
-# ### `get_bin_widths`
+# ### `get_bin_sizes`
 
-def get_bin_widths(total_points, target_bin_width) -> Array[int,1]:
+def get_bin_sizes(total_points, target_bin_size) -> Array[int,1]:
     """
-    Return an array of bin widths, each approximately equal to `target_bin_width`
+    Return an array of bin widths, each approximately equal to `target_bin_size`
     and such that their sum is exactly equal to `total_points`.
     This can be used to construct histograms with bars of different width but
     comparable statistical power.
     
-    - If `target_bin_width` does not divide `total_points` exactly, some bins
+    - If `target_bin_size` does not divide `total_points` exactly, some bins
       will be larger by 1.
     - All returned bins have at least the value specified by 
-      `target_bin_width`.
+      `target_bin_size`.
     - The subset of bins which are larger, if any, is distributed roughly
       uniformly throughout the list.
     - The distribution of larger bins is deterministic: calling the function
@@ -222,15 +222,16 @@ def get_bin_widths(total_points, target_bin_width) -> Array[int,1]:
     Example
     -------
     >>> for tp, tbw in [(243, 30), (30, 30), (243, 20), (239, 12), (100, 30)]:
-    ...   bw = get_bin_widths(tp, tbw)
+    ...   bw = get_bin_sizes(tp, tbw)
     ...   print(tp, tbw, bw.sum(), bw, np.unique(bw).size)
     243 30 243 [30 30 31 30 30 31 30 31] 2
     30 30 30 [30] 1
     243 20 243 [20 20 20 21 20 20 20 21 20 20 20 21] 2
     239 12 239 [12 13 12 13 12 13 13 12 13 12 13 12 13 13 12 13 12 13 13] 2
     """
-    nbins = total_points // target_bin_width
-    total_extra = total_points % target_bin_width
+    report_err_msg = "This is most likely an unaccounted for corner case with `get_bin_sizes`; please report it along with the values for `total_points` and `target_bin_size` you used."
+    nbins = total_points // target_bin_size
+    total_extra = total_points % target_bin_size
     extra_per_bin_all = total_extra // nbins
     extra_to_distribute = total_extra % nbins
     if extra_to_distribute:
@@ -239,15 +240,26 @@ def get_bin_widths(total_points, target_bin_width) -> Array[int,1]:
         c = 0
         for i in range(nbins):
             new_c = c + dist_rate
-            distributed_ones.append(int((int(c) != int(new_c)) and sum(distributed_ones) < extra_to_distribute))
+            distributed_ones.append(int(int(c) != int(new_c)))
             c = new_c
+        # Correct off-by-one errors by either removing or adding to the last bin
+        tot_distributed = sum(distributed_ones)
+        if tot_distributed < extra_to_distribute:
+            assert tot_distributed == extra_to_distribute - 1, "Bin size arithmetic is off by more than one. " + report_err_msg
+            last_0_idx = nbins - 1 - next(i for i, n in enumerate(reversed(distributed_ones)) if n == 0)  # Finds the rightmost index with a 0 value in `distributed_ones`
+            distributed_ones[last_0_idx] = 1
+        if tot_distributed > extra_to_distribute:
+            assert tot_distributed == extra_to_distribute + 1, "Bin size arithmetic is off by more than one. " + report_err_msg
+            last_1_idx = nbins - 1 - next(i for i, n in enumerate(reversed(distributed_ones)) if n == 1)  # Finds the rightmost index with a 1 value in `distributed_ones`
+            distributed_ones[last_1_idx] = 0
+
     else:
         distributed_ones = np.zeros(nbins, dtype=int)
             
-    bin_widths = target_bin_width + extra_per_bin_all + np.array(distributed_ones)
-    assert bin_widths.sum() == total_points  # Correct number of points
-    assert np.unique(bin_widths).size <= 2   # Widths differ by at most 1
-    return bin_widths
+    bin_sizes = target_bin_size + extra_per_bin_all + np.array(distributed_ones)
+    assert bin_sizes.sum() == total_points, f"Bins sum to {bin_sizes.sum()}, when they should sum to {total_points}. " + report_err_msg
+    assert np.unique(bin_sizes).size <= 2, f"Bin sizes should not differ by more than one." + report_err_msg
+    return bin_sizes
 
 
 # ### `plot_param_space`

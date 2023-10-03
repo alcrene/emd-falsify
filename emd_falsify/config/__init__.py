@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 import uuid
 from pathlib import Path
-from typing import Optional, ClassVar, Union, Literal
+from typing import Optional, ClassVar, Union, Literal, Dict
 from configparser import ConfigParser
 
 from pydantic import BaseModel, Field, validator, root_validator
@@ -9,7 +9,7 @@ from pydantic import BaseModel, Field, validator, root_validator
 # from mackelab_toolbox.config.holoviews import FiguresConfig
     # prepend_rootdir is a workaround because assigning automatically doesn’t currently work
 from valconfig import ValConfig, ensure_dir_exists
-from valconfig.contrib.holoviews import FiguresConfig
+from valconfig.contrib.holoviews import FiguresConfig, HoloMPLConfig, HoloBokehConfig, GenericParam
 from scityping import Config as ScitypingConfig
 
 # Possible improvement: If we could have nested config parsers, we might be 
@@ -21,14 +21,14 @@ from scityping import Config as ScitypingConfig
 class Config(ValConfig):
     __default_config_path__   = "defaults.cfg"
 
-    class paths:
-        figuresdir : Path
+    # class paths:
+    #     figuresdir : Path
 
-        _ensure_dir_exists = validator("figuresdir", allow_reuse=True
-                                      )(ensure_dir_exists)
+    #     _ensure_dir_exists = validator("figuresdir", allow_reuse=True
+    #                                   )(ensure_dir_exists)
 
-    class random:
-        entropy: int
+    # class random:
+    #     entropy: int
 
     class mp:
         max_cores: int
@@ -79,7 +79,15 @@ class Config(ValConfig):
                 hostdir = "host-"+"".join(clst)
                 return location/hostdir
 
-    figures: FiguresConfig
+    class viz(FiguresConfig):
+        class matplotlib(HoloMPLConfig):
+            prohibited_area : Dict[str, GenericParam]={}
+            discouraged_area: Dict[str, GenericParam]={}
+            calibration_curves: Dict[str, GenericParam]={}
+        class bokeh(HoloBokehConfig):
+            prohibited_area : Dict[str, GenericParam]={}
+            discouraged_area: Dict[str, GenericParam]={}
+            calibration_curves: Dict[str, GenericParam]={}
 
     scityping: ScitypingConfig={}
     
@@ -87,6 +95,7 @@ class Config(ValConfig):
     def add_emd_falsify_safe_packages(scityping):
         scityping.safe_packages |= {"emd_falsify.tasks"}
         # scityping.safe_packages |= {"emd_falsify.models", "emd_falsify.tasks"}
+        return scityping
 
 
 # config = Config(Path(__file__).parent/"defaults.cfg",

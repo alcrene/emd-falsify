@@ -68,12 +68,12 @@ __all__ = ["interp1d", "make_empirical_risk_ppf", "draw_R_samples", "Bemd"]
 
 # + tags=["active-ipynb", "remove-cell"] editable=true slideshow={"slide_type": ""}
 # from scipy import stats
-# hv.extension(config.figures.backend)
+# hv.extension(config.viz.backend)
 # logging.basicConfig(level=logging.WARNING)
 # logger.setLevel(logging.ERROR)
 
 # + editable=true slideshow={"slide_type": ""} tags=["active-ipynb", "remove-cell"]
-# colors = config.figures.matplotlib.colors["medium-contrast"]
+# colors = config.viz.matplotlib.colors["medium-contrast"]
 
 # + [markdown] editable=true slideshow={"slide_type": ""}
 # (supp_emd-implementation_example-sampling-paths)=
