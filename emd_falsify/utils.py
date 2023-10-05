@@ -9,199 +9,27 @@
 #       format_version: '1.5'
 # ---
 
-# # Utilities for the EMD-distance library
+# # Utilities for the EMD-falsify library
 
 import math
 import numpy as np
+import pandas as pd
 import dataclasses
 import logging
 from inspect import unwrap
 
 import IPython
 
-from typing import ClassVar, Optional, Union, Tuple, NamedTuple, Literal
+from typing import ClassVar, Optional, Union, Tuple, NamedTuple, Literal, Dict
 from scityping.numpy import NPValue, Array
+from numpy.typing import ArrayLike
 
-# ```python
-# import holoviews as hv
-# ```
-
-# + tags=["remove-cell"]
-try:
-    import holoviews as hv
-except ModuleNotFoundError:
-    # One could want to use this package without Holoviews: it is only required by the function `calibration_plot`
-    class HoloviewsNotFound:
-        def __getattr__(self, attr):
-            raise ModuleNotFoundError("Unable to import Holoviews; perhaps it is not installed ?")
-    hv = HoloviewsNotFound()
 # -
-
-from .digitize import make_int_superscript
 
 logger = logging.getLogger(__name__)
 
 
-# ## glue
-
-#     import myst_nb
-
-#     def glue(name, variable, display=True, print_name=True,
-#              backend: Optional[Literal['bokeh', 'matplotlib']]=None):
-#         """Use either `myst_nb.glue` or `myst_nb_bokeh.glue`.
-#         
-#         Which function to use is determined by inspecting the argument.
-#         If `print_name` is True (default), the glue name is also printed; this can 
-#         useful to find the correct name to use refer to the figure from the
-#         rendered document.
-#         
-#         Supports: Anything 'myst_nb.glue' supports, Bokeh, Holoviews
-#         """
-#         # TODO: Return a more nicely formatted object, with _repr_html_,
-#         #       which combines returned fig object and prints the name below
-#     
-#         if backend is None:
-#             backend = glue.default_holoviews_backend
-#         if backend is None:
-#             raise TypeError("Backend not specified. Either provide as argument, "
-#                             "or set `glue.default_holoviews_backend`")
-#         elif backend not in {"bokeh", "matplotlib"}:
-#             raise ValueError("config.backend should be either 'bokeh' or 'matplotlib'")
-#         
-#         if print_name:
-#             if IPython.get_ipython():
-#                 IPython.display.display(name)  # Should look nicer in Jupyter Book, especially when there are multiple glue statements
-#             else:
-#                 print(name)
-#         mrostr = str(type(variable).mro()).lower()
-#         if "bokeh" in mrostr:
-#             # Normal Bokeh object (since HoloViews objects are renderer-agnostic, they should never have "bokeh" in their class inheritance)
-#             from myst_nb_bokeh import glue_bokeh
-#             return glue_bokeh(name, bokeh_obj, display)
-#     
-#         if "holoviews" in mrostr:
-#             import holoviews as hv
-#             if backend == "bokeh":
-#                 from myst_nb_bokeh import glue_bokeh
-#                 # Render Holoviews object to get a normal Bokeh plot
-#                 bokeh_obj = hv.render(variable, backend="bokeh")
-#                 return glue_bokeh(name, bokeh_obj, display)
-#             else:
-#                 # Render Holoviews object to get a normal Matplotlib plot
-#                 mpl_obj = hv.render(variable, backend="matplotlib")
-#                 return myst_nb.glue(name, mpl_obj, display)
-#     
-#         else:
-#             return myst_nb.glue(name, variable, display)
-
-#     glue.default_holoviews_backend = None
-
-# ## format_scientific
-
-def format_scientific(a: Union[int,float], sig_digits=3, tex=False) -> str:
-    """
-    Format a number in scientific notation, with the requested number of
-    significant digits.
-    """
-    # First deal with the sign, since log10 requires strictly positive values
-    if a < 0:
-        sgn = "-"
-        a = -a
-    elif a == 0:
-        return "0." + "0"*(sig_digits-1)
-    else:
-        sgn = ""
-    # First round the number to avoid issues with things like 0.99999
-    ## vvv EARLY EXITS vvv ##
-    if not math.isfinite(a):
-        if a == math.inf:
-            return "\\infty" if tex else "∞"
-        elif a == -math.inf:
-            return "-\\infty" if tex else "-∞"
-        else:
-            return str(a)
-    ## ^^^ EARLY EXITS ^^^ ##
-    p = int(math.log10(a))
-    if p >= 0:
-        a = round(a / 10**p, sig_digits-1)
-    else:
-        a = round(a / 10**p, sig_digits)  # Need one digit more, because we use the first one to replace the initial '0.'
-    # Now we have a good value a with non-pathological loading on the first digit
-    # Since a has changed though, we should check again that p is correct
-    p2 = int(math.log10(a))  # Most of the time this will be 0
-    p += p2
-    i, f = str(float(a/10**p2)).split(".")
-    if i == "0":
-        i, f = f[0], f[1:]
-        p -= 1
-    f = (f+"0"*sig_digits)[:sig_digits-1]
-    #i = int(a // 10**p2)
-    #f = str(a % 10**p2).replace('.','')[:sig_digits-1]
-    if p == 0:
-        s = f"{sgn}{i}.{f}"
-    else:
-        if tex:
-            s = f"{sgn}{i}.{f} \\times 10^{{{p}}}"
-        else:
-            s = f"{sgn}{i}.{f}×10{make_int_superscript(p)}"
-
-    return s
-
-# ### Test
-
-# + tags=["active-ipynb"]
-# if __name__ == "__main__":
-#     assert format_scientific(0.9999999999999716) == "1.00"
-#     assert format_scientific(1.0000000000000284) == "1.00"
-#     assert format_scientific(9999.999999999716) == "1.00×10⁴"
-#     assert format_scientific(1000.0000000000284) == "1.00×10³"
-#     assert format_scientific(5.34) == "5.34"
-#     assert format_scientific(32175254) == "3.22×10⁷"
-#     assert format_scientific(0.000002789) == "2.79×10⁻⁶"
-#     assert format_scientific(0.000002781) == "2.78×10⁻⁶"
-#
-#     assert format_scientific(0) == "0.00"
-#
-#     assert format_scientific(-0.9999999999999716) == "-1.00"
-#     assert format_scientific(-1.0000000000000284) == "-1.00"
-#     assert format_scientific(-9999.999999999716) == "-1.00×10⁴"
-#     assert format_scientific(-1000.0000000000284) == "-1.00×10³"
-#     assert format_scientific(-5.34) == "-5.34"
-#     assert format_scientific(-32175254) == "-3.22×10⁷"
-#     assert format_scientific(-0.000002789) == "-2.79×10⁻⁶"
-#     assert format_scientific(-0.000002781) == "-2.78×10⁻⁶"
-# -
-
-# ## Plotting
-
-from smttask.workflows import ParamColl, ExpandableRV
-# Scipy.stats does not provide a public name for the frozen dist types
-try:
-    from scipy import stats
-except ModuleNotFoundError:
-    class RVFrozen:  # This is only used in isinstance() checks, so an empty
-        pass         # class suffices to avoid those tests failing and simply return `False`
-else:
-    # This way of finding RVFrozen should be robust across SciPy version, even when the module name changes (as it has)
-    RVFrozen = next(C for C in type(stats.norm()).mro() if "frozen" in C.__name__.lower())
-
-# ### `get_bounds`
-
-def get_bounds(*arrs, lower_margin=0.05, upper_margin=0.05) -> Tuple[float, float]:
-    """
-    Return bounds that include all values of the given arrays, plus a little more.
-    How much more is determined by the margins; 0.05 increases the range
-    by about 5%.
-    Intended for recomputing the bounds in figures.
-    
-    Returns a tuple of ``(low, high)`` bounds.
-    """
-    low = min(arr.min() for arr in arrs); high = max(arr.max() for arr in arrs)
-    width = high-low
-    return (low-lower_margin*width, high+upper_margin*width)
-
-
-# ### `get_bin_sizes`
+# ## `get_bin_sizes`
 
 def get_bin_sizes(total_points, target_bin_size) -> Array[int,1]:
     """
@@ -261,28 +89,44 @@ def get_bin_sizes(total_points, target_bin_size) -> Array[int,1]:
     assert np.unique(bin_sizes).size <= 2, f"Bin sizes should not differ by more than one." + report_err_msg
     return bin_sizes
 
+# ## Bemd comparison matrix
 
-# ### `plot_param_space`
+def compare_matrix(R_samples: Dict[str, ArrayLike]) -> pd.DataFrame:
+    """Return the Bemd probabilities as a square DataFrame.
 
-def _plot_param_hist_dict(Θcoll: ParamColl, θdim="param"):
-    rv_params = [name for name, val in Θcoll.items() if isinstance(val, ExpandableRV)]
-    kdims = {name: Θcoll.dims.get(name, name) for name in rv_params}
-    kdims = {name: dim if isinstance(dim, hv.Dimension) else hv.Dimension(name, label=dim) for name, dim in kdims.items()}
-    pdims = {name: hv.Dimension(f"p{name}", label=f"p({kdims[name].label})") for name in rv_params}
-    hists = {name: hv.Histogram(np.histogram(Θcoll[name].rvs(1000), bins="auto", density=True),
-                                kdims=kdims[name], vdims=pdims[name])
-             for name in rv_params}
-    # Augment with histograms from nested ParamColls
-    nested_paramcolls = [(name, val) for name, val in Θcoll.items() if isinstance(val, ParamColl)]
-    for name, paramcoll in nested_paramcolls:
-        new_hists = {f"{name}.{pname}": phist
-                     for pname, phist in _plot_param_hist_dict(paramcoll, θdim).items()}
-        hists = {**hists, **new_hists}
-    return hists
+    Probabilities are computed from samples of the expected risk.
+    They are the EMD estimate of ``P(R_a < R_b)``, with ``a`` given along
+    rows and ``b`` given along columns.
 
-def plot_param_space(Θcoll: ParamColl, θdim="param"):
-    hists = _plot_param_hist_dict(Θcoll, θdim)
-    return hv.HoloMap(hists, kdims=[θdim]).layout().cols(3)
+    Example usage:
+
+        >>> import emd_falsify as emd
+        >>> [define models A, B, C]
+        >>> R_samples = {"A": emd.draw_R_samples(model A),
+                         "B": emd.draw_R_samples(model B),
+                         "C": emd.draw_R_samples(model C)}
+        >>> emd.utils.compare_matrix(R_samples)
+                   A      B       C   
+            A   0.500   0.468   0.868
+            B   0.532   0.500   0.880
+            C   0.132   0.120   0.500
+
+    :param:R_samples: A dictionary of samples of the expected risk.
+       Each entry is a list of samples for a model. The dictionary keys
+       determine the headings of the returned DataFrame.
+    """
+    R_keys = list(R_samples)
+    compare_data = {k: {} for k in R_keys}
+    for i, a in enumerate(R_keys):
+        for j, b in enumerate(R_keys):
+            if i == j:
+                assert a == b
+                compare_data[b][a] = 0.5
+            elif j < i:
+                compare_data[b][a] = 1 - compare_data[a][b]
+            else:
+                compare_data[b][a] = np.less.outer(R_samples[a], R_samples[b]).mean()
+    return pd.DataFrame(compare_data)
 
 # ## Pretty-print Git version
 # (Ported from *mackelab_toolbox.utils*)

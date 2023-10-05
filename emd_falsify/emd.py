@@ -55,7 +55,6 @@ from scityping.numpy import Array
 from emd_falsify import Config
 from emd_falsify.path_sampling import generate_quantile_paths
 from emd_falsify.memoize import memoize
-from emd_falsify.utils import hv  # Holoviews is imported with a guard in case it is not installed
 
 config = Config()
 logger = logging.getLogger(__name__)
@@ -68,6 +67,7 @@ __all__ = ["interp1d", "make_empirical_risk_ppf", "draw_R_samples", "Bemd"]
 
 # + tags=["active-ipynb", "remove-cell"] editable=true slideshow={"slide_type": ""}
 # from scipy import stats
+# import holoviews as hv
 # hv.extension(config.viz.backend)
 # logging.basicConfig(level=logging.WARNING)
 # logger.setLevel(logging.ERROR)

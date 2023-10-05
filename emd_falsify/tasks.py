@@ -448,7 +448,7 @@ class Calibrate:
 # %% [markdown] editable=true slideshow={"slide_type": ""}
 # Variant without multiprocessing:
 
-        # %% editable=true slideshow={"slide_type": ""} tags=["skip-execution"]
+        # %% editable=true slideshow={"slide_type": ""}
         else:
             Bemd_it = (compute_Bemd_partial(arg)
                        for arg in self.model_c_gen(Bemd_results, Bconf_results))
@@ -476,7 +476,7 @@ class Calibrate:
         return dict(Bemd =list(Bemd_results.values()),
                     Bconf=list(Bconf_results.values()))
 
-# %% [markdown] editable=true slideshow={"slide_type": ""} tags=["remove-cell"]
+# %% [markdown] editable=true slideshow={"slide_type": ""}
 # > **END OF `Calibrate.__call__`**
 
     # %% editable=true slideshow={"slide_type": ""} tags=["skip-execution"]
