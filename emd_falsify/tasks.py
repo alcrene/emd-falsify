@@ -314,7 +314,7 @@ def compute_Bemd(datamodel_c: Tuple[DataModel,float],
     emdlogger.setLevel(emdlogginglevel)
 
     t2 = time.perf_counter()
-    logger.debug(f"Compute Bemd - Done generating R samples. Took {t1-t2:.2f} s")
+    logger.debug(f"Compute Bemd - Done generating R samples. Took {t2-t1:.2f} s")
                      
     ## Compute the EMD criterion ##
     return np.less.outer(RA_lst, RB_lst).mean()
@@ -324,10 +324,18 @@ def compute_Bconf(data_model, riskA, riskB, Linf):
     """Compute the true Bconf (using a quasi infinite number of samples)"""
     
     # Generate samples
+    logger.debug(f"Compute Bconf – Generating 'infinite' dataset with {Linf} data points"); t1 = time.perf_counter()
     data = data_model(Linf)
+    t2 = time.perf_counter()
+    logger.debug(f"Compute Bconf – Done generating 'infinite' dataset. Took {t2-t1:.2f} s")
     
     # Compute Bconf
-    return riskA(data).mean() > riskB(data).mean()
+    logger.debug("Compute Bconf – Evaluating expected risk on 'infinite' dataset"); t1 = time.perf_counter()
+    RA = riskA(data).mean()
+    RB = riskB(data).mean()
+    t2 = time.perf_counter()
+    logger.debug(f"Compute Bconf – Done evaluating risk. Took {t2-t1:.2f} s")
+    return RA < RB
 
 
 # %% [markdown] editable=true slideshow={"slide_type": ""}
