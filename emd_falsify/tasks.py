@@ -526,3 +526,12 @@ class Calibrate:
                     yield (data_model, c)
                 else:                                    # Skip results which are already loaded
                     assert data_model in Bconf_results
+
+# %% [markdown]
+# :::{admonition} Possible improvements
+# :class: todo
+#
+# - `Calibrate` variant which adjusts the candidate models to the drawn dataset parameters (e.g. temperature or wavelength range in the models for black body radiation, or different statistics of the input noise an a dynamical model.
+#     - Recomputing the synthetic PPF for each model is a challenge, both because of compute time but also for the API (since it needs to prescribe a model signature).  
+#       One solution may be to ask the `CalibrationDist` to return not only data models, but also synthetic PPFs.
+# :::
