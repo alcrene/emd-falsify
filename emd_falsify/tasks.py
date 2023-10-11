@@ -125,15 +125,15 @@ class CalibrationDist(abc.ABC):
 # | Parameter | Description |
 # |-----------|-------------|
 # | `c_list` | The values of $c$ we want to test. |
-# | `data_models` | Sequence of $N$ data generation models drawn from a calibration distribution. Typically, but not necessarily, a subclass of `CalibrationDist`: any dataclass satisfying the requirements listed in `CalibrationDist` is accepted. |
+# | `models` | Sequence of $N$ triplets of models (data generation, candidate A, candidate B) drawn from a calibration distribution. Typically, but not necessarily, a subclass of `CalibrationDist`: any dataclass satisfying the requirements listed in `CalibrationDist` is accepted. |
 # | `riskA` | Risk function for candidate model $A$. |
 # | `riskA` | Risk function for candidate model $B$. |
-# | `synth_risk_ppfA` | Synthetic PPF of the risk of candidate model $A$. Almost always an instance of `scipy.interpolate.interp1d`. |
-# | `synth_risk_ppfB` | Synthetic PPF of the risk of candidate model $B$. Almost always an instance of `scipy.interpolate.interp1d`. |
+# | `synth_risk_ppfA` | REMOVED. Synthetic PPF of the risk of candidate model $A$. Almost always an instance of `scipy.interpolate.interp1d`. |
+# | `synth_risk_ppfB` | REMOVED. Synthetic PPF of the risk of candidate model $B$. Almost always an instance of `scipy.interpolate.interp1d`. |
 # | `Ldata` | Data set size used to construct the empirical PPF for models $A$ and $B$. Ideally commensurate with the actual data set used to assess models. |
 # | `Linf` | Data set size considered equivalent to "infinite". Used to compute $\B^{\mathrm{conf}}$ |
 #
-# The value of $N$ is determined from `len(data_models)`, so the `data_models` iterable should define its length.
+# The value of $N$ is determined from `len(models)`, so the `models` iterable should define its length.
 #
 # #### Config values:
 #
@@ -176,9 +176,9 @@ class CalibrationDist(abc.ABC):
 # |-------------|--------|----------|
 # | Pickleable  | Sent to subprocess | `compute_Bemd` arguments |
 # | Serializable | Saved to disk | `Calibrate` arguments<br>`CalibrateResult` |
-# | Hashable    | Used as dict key | items of `data_models`<br>items of `c_list` |
+# | Hashable    | Used as dict key | items of `models`<br>items of `c_list` |
 #
-# To satisfy these requirements, the sequence `data_models` needs to be specified as a frozen dataclass:[^more-formats] Dataclasses for serializability, frozen for hashability. Of course they should also define `__iter__` and `__len__` – see [`CalibrationDist`](code_calibration-distribution) for an example.
+# To satisfy these requirements, the sequence `models` needs to be specified as a frozen dataclass:[^more-formats] Dataclasses for serializability, frozen for hashability. Of course they should also define `__iter__` and `__len__` – see [`CalibrationDist`](code_calibration-distribution) for an example.
 #
 # The `riskA` and `riskB` functions can be specified as either dataclasses (with a suitable `__call__` method) or [`PureFunction`s](https://scityping.readthedocs.io/en/latest/api/functions.html#scityping.functions.PureFunction). In practice we found dataclasses easier to use.
 #
@@ -190,7 +190,7 @@ class CalibrationDist(abc.ABC):
 SynthPPF = Callable[[np.ndarray[float]], np.ndarray[float]]
 
 # %% [markdown] editable=true slideshow={"slide_type": ""}
-# The items of the `data_models` sequence must be functions which take a single argument – the data size $L$ – and return a data set of size $L$:
+# The items of the `models` sequence must be functions which take a single argument – the data size $L$ – and return a data set of size $L$:
 # $$\begin{aligned}
 # \texttt{data\_model}&:& L &\mapsto
 #       \bigl[(x_1, y_1), (x_2, y_2), \dotsc, (x_L, y_L)\bigr]
@@ -204,6 +204,7 @@ Dataset = TypeVar("Dataset",
                               List[Tuple[np.ndarray, np.ndarray]]]
                  )
 DataModel = Callable[[int], Dataset]
+CandidateModel = Callable[[Dataset], Dataset]
 
 # %% [markdown] editable=true slideshow={"slide_type": ""}
 # The `riskA` and `riskB` functions take a dataset returned by `data_model` and evaluate the risk $q$ of each sample. They return a vector of length $L$, and their signature depends on the output format of `data_model`:
@@ -266,9 +267,10 @@ class CalibrateOutput(TaskOutput):
 # - $\Bconf{}$ only needs to be computed once per data model. $\Bconf{}$ is also typically cheap (unless the data generation model is very complicated), so it is not worth dispatching to an MP subprocess.  
 
 # %% editable=true slideshow={"slide_type": ""}
-def compute_Bemd(datamodel_c: Tuple[DataModel,float],
+def compute_Bemd(datamodel_c: Tuple[DataModel,CandidateModel,CandidateModel,float],
                  riskA: RiskFunction, riskB: RiskFunction,
-                 synth_ppfA: SynthPPF, synth_ppfB: SynthPPF,
+                 #synth_ppfA: SynthPPF, synth_ppfB: SynthPPF,
+                 #candidate_model_A: CandidateModel, candidate_model_B: CandidateModel,
                  Ldata):
     """
     Wrapper for `emd_falsify.Bemd`:
@@ -283,12 +285,16 @@ def compute_Bemd(datamodel_c: Tuple[DataModel,float],
     with fixed parameters.
     """
     ## Unpack arg 1 ##  (pool.imap requires iterating over one argument only)
-    data_model, c = datamodel_c
+    data_model, candidate_model_A, candidate_model_B, c = datamodel_c
 
     ## Generate observed data ##
     logger.debug(f"Compute Bemd - Generating {Ldata} data points."); t1 = time.perf_counter()
     data = data_model(Ldata)                                      ; t2 = time.perf_counter()
     logger.debug(f"Compute Bemd - Done generating {Ldata} data points. Took {t2-t1:.2f} s")
+
+    ## Construct synthetic quantile functions ##
+    synth_ppfA = emd.make_empirical_risk_ppf(riskA(candidate_model_A(data)))
+    synth_ppfB = emd.make_empirical_risk_ppf(riskB(candidate_model_B(data)))
 
     ## Construct mixed quantile functions ##
     mixed_ppfA = emd.make_empirical_risk_ppf(riskA(data))
@@ -317,7 +323,10 @@ def compute_Bemd(datamodel_c: Tuple[DataModel,float],
     logger.debug(f"Compute Bemd - Done generating R samples. Took {t2-t1:.2f} s")
                      
     ## Compute the EMD criterion ##
-    return np.less.outer(RA_lst, RB_lst).mean()
+    Bemd = np.less.outer(RA_lst, RB_lst).mean()
+
+    ## Return alongside the experiment key
+    return (data_model, c), Bemd
 
 # %% editable=true slideshow={"slide_type": ""}
 def compute_Bconf(data_model, riskA, riskB, Linf):
@@ -349,18 +358,18 @@ class Calibrate:
         self,
         c_list     : List[float],
         #data_models: Sequence[DataModel],
-        data_models: Dataclass,
+        models     : Dataclass,
         #riskA     : RiskFunction
         riskA      : Union[Dataclass,PureFunction],
         riskB      : Union[Dataclass,PureFunction],
         #synth_risk_ppf: SynthPPF
-        synth_risk_ppfA  : Union[emd.interp1d, PureFunction],
-        synth_risk_ppfB  : Union[emd.interp1d, PureFunction],
+        #synth_risk_ppfA  : Union[emd.interp1d, PureFunction],
+        #synth_risk_ppfB  : Union[emd.interp1d, PureFunction],
         Ldata      : int,
         Linf       : int,
         ) -> CalibrateOutput:
         """
-        Run a calibration experiment using the models listed in `data_models`.
+        Run a calibration experiment using the models listed in `models`.
         Data models must be functions taking a single argument – an integer – and
         returning a dataset with that many samples. They should be “ready to use”;
         in particular, their random number generator should already be properly seeded
@@ -370,7 +379,7 @@ class Calibrate:
         ----------
         c_list:
         
-        data_models: Dataclass following the pattern of `CalibrationDist`.
+        models: Dataclass following the pattern of `CalibrationDist`.
             Therefore also an iterable of data models to use for calibration.
             See `CalibrationDist` for more details.
             Each data model will result in one (Bconf, Bemd) pair in the output results.
@@ -404,7 +413,7 @@ class Calibrate:
         # %% editable=true slideshow={"slide_type": ""} tags=["skip-execution"]
         compute_Bemd_partial = partial(
             compute_Bemd, riskA=riskA, riskB=riskB,
-                          synth_ppfA=synth_risk_ppfA, synth_ppfB=synth_risk_ppfB,
+                          #synth_ppfA=synth_risk_ppfA, synth_ppfB=synth_risk_ppfB,
                           Ldata=Ldata)
 
 # %% [markdown]
@@ -421,7 +430,7 @@ class Calibrate:
 
         # %% editable=true slideshow={"slide_type": ""} tags=["skip-execution"]
         try:
-            N = len(data_models)
+            N = len(models)
         except (TypeError, AttributeError):  # Typically TypeError, but AttributeError seems also plausible
             logger.info("Data model iterable has no length: it will not be possible to estimate the remaining computation time.")
             total = None
@@ -445,9 +454,10 @@ class Calibrate:
                 Bemd_it = pool.imap(compute_Bemd_partial,
                                     self.model_c_gen(Bemd_results, Bconf_results),
                                     chunksize=chunksize)
-                for (data_model, c), Bemd_res in zip(                                     # NB: Both `models_c_gen` generators
-                        self.model_c_gen(Bemd_results, Bconf_results),               # always yield the same tuples,
-                        Bemd_it):                                                     # because we only update Bemd_results
+                for (data_model, c), Bemd_res in Bemd_it:
+                # for (data_model, c), Bemd_res in zip(                                     # NB: Both `models_c_gen` generators
+                #         self.model_c_gen(Bemd_results, Bconf_results),               # always yield the same tuples,
+                #         Bemd_it):                                                     # because we only update Bemd_results
                     progbar.update(1)        # Updating first more reliable w/ ssh    # after drawing from the second generator
                     Bemd_results[data_model, c] = Bemd_res
                     if data_model not in Bconf_results:
@@ -460,9 +470,10 @@ class Calibrate:
         else:
             Bemd_it = (compute_Bemd_partial(arg)
                        for arg in self.model_c_gen(Bemd_results, Bconf_results))
-            for (data_model, c), Bemd_res in zip(                                     # NB: Both `model_c_gen` generators
-                    self.model_c_gen(Bemd_results, Bconf_results),               # always yield the same tuples,
-                    Bemd_it):                                                     # because we only update Bemd_results
+            for (data_model, c), Bemd_res in Bemd_it:
+            # for (data_model, c), Bemd_res in zip(                                     # NB: Both `model_c_gen` generators
+            #         self.model_c_gen(Bemd_results, Bconf_results),               # always yield the same tuples,
+            #         Bemd_it):                                                     # because we only update Bemd_results
                 progbar.update(1)        # Updating first more reliable w/ ssh    # after drawing from the second generator
                 Bemd_results[data_model, c] = Bemd_res
                 if data_model not in Bconf_results:
@@ -477,7 +488,7 @@ class Calibrate:
 # %% [markdown] editable=true slideshow={"slide_type": ""}
 # #### Result format
 #
-# If we serialize the whole dict, most of the space is taken up by serializing the data_models in the keys. Not only is this wasteful – we can easily recreate them with `model_c_gen` – but it also makes deserializing the results quite slow.
+# If we serialize the whole dict, most of the space is taken up by serializing the models in the keys. Not only is this wasteful – we can easily recreate them with `model_c_gen` – but it also makes deserializing the results quite slow.
 # So instead we return just the values as a list, and provide an `unpack_result` method which reconstructs the result dictionary.
 
         # %% editable=true slideshow={"slide_type": ""} tags=["skip-execution"]
@@ -493,7 +504,7 @@ class Calibrate:
         # Reconstruct the dictionary as it was at the end of task execution
         Bemd_dict = {}; Bemd_it = iter(result.Bemd)
         Bconf_dict = {}; Bconf_it = iter(result.Bconf)
-        for data_model in self.taskinputs.data_models:
+        for data_model in self.taskinputs.models:
             Bconf_dict[data_model] = next(Bconf_it)
             for c in self.taskinputs.c_list:
                 Bemd_dict[(data_model, c)] = next(Bemd_it)
@@ -510,7 +521,7 @@ class Calibrate:
 # %% [markdown] editable=true slideshow={"slide_type": ""}
 # #### (Model, $c$) generator
 #
-# `task.model_c_gen` yields combined `(data_model, c)` tuples by iterating over both `data_models` and `c_list`. The reason we implement this in its own method is so we can recreate the sequence of models and $c$ values in `unpack_results`: this way we only need to store the sequence of $\Bemd{}$ and $\Bconf{}$ values for each (model, $c$) pair, but not the models themselves.
+# `task.model_c_gen` yields combined `(data_model, c)` tuples by iterating over both `models` and `c_list`. The reason we implement this in its own method is so we can recreate the sequence of models and $c$ values in `unpack_results`: this way we only need to store the sequence of $\Bemd{}$ and $\Bconf{}$ values for each (model, $c$) pair, but not the models themselves.
 
     # %% editable=true slideshow={"slide_type": ""} tags=["skip-execution"]
     def model_c_gen(self, Bemd_results: "dict|set", Bconf_results: "dict|set"):
@@ -520,18 +531,10 @@ class Calibrate:
         implementation, before this function was made a *Task* — in the current 
         implementation, the task always behaves as though empty dictionaries were passed.
         """
-        for data_model in self.taskinputs.data_models:    # Using taskinputs allows us to call `model_c_gen`
+        for data_model, modelA, modelB in self.taskinputs.models:    # Using taskinputs allows us to call `model_c_gen`
             for c in self.taskinputs.c_list:             # after running the task to recreate the keys.
                 if (data_model, c) not in Bemd_results:
-                    yield (data_model, c)
+                    yield (data_model, modelA, modelB, c)
                 else:                                    # Skip results which are already loaded
                     assert data_model in Bconf_results
 
-# %% [markdown]
-# :::{admonition} Possible improvements
-# :class: todo
-#
-# - `Calibrate` variant which adjusts the candidate models to the drawn dataset parameters (e.g. temperature or wavelength range in the models for black body radiation, or different statistics of the input noise an a dynamical model.
-#     - Recomputing the synthetic PPF for each model is a challenge, both because of compute time but also for the API (since it needs to prescribe a model signature).  
-#       One solution may be to ask the `CalibrationDist` to return not only data models, but also synthetic PPFs.
-# :::
