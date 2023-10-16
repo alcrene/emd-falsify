@@ -661,11 +661,15 @@ def Bemd(mixed_risk_ppfA: Callable, mixed_risk_ppfB: Callable,
     elif progbarA == 'auto':  # NB: This works because we already excluded tqdm (tqdm types raise AttributeError on ==)
         progbarA = tqdm(desc="sampling quantile fns (A)")
         close_progbarA = True
+    else:  # With `progbarA=None`, we don’t create a progbar, so nothing to close.
+        close_progbarA = False
     if isinstance(progbarB, tqdm):
         close_progbarB = False
     elif progbarB == 'auto':
         progbarB = tqdm(desc="sampling quantile fns (B)")
         close_progbarB = True
+    else:
+        close_progbarB = False
     
     if not use_multiprocessing:
         RA_lst = draw_R_samples(
