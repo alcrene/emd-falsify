@@ -513,9 +513,7 @@ def _draw_from_beta_scalar(r: Real, v: Real, rng: RNGenerator, n_samples: int=1,
         #     # Normal case: Initialize fit at log(α, β) = (1, 1)
         #     x0 = (0., 0.)
         x, success = mvroot_solver(f, x0, args=[_log(r), v], method="hybr")
-        try:
-            assert success
-        except AssertionError:
+        if not success:
             logger.error("Failed to determine α & β parameters for beta distribution. "
                          f"Conditions were:\n  {r=}\n  {v=}")
         α, β = _exp(x)
@@ -1245,7 +1243,14 @@ def generate_path_hierarchical_beta(
         d = qhat[i+Δi] - qhat[i-Δi] # Each pair of increments must sum to `d`
         r = (qsarr[i] - qsarr[i-Δi]) / (qsarr[i+Δi]-qsarr[i])  # Ratio of first/second increments
         v = 2*Mvar[i]
-        x1 = draw_from_beta(r, v, rng=rng)
+        # Prevent failure in pathological cases where `q` is flat in some places
+        if ((qsarr[i+Δi] - qsarr[i-Δi]) == 0).any():   # If both increments are zero, then the calculation for `r` gives 0/0 => NaN
+            logger.warning("The quantile function is not strictly increasing. Non-increasing intervals were skipped. The sampling of EMD paths may be less accurate.")
+            keep = ((qsarr[i+Δi] - qsarr[i-Δi]) > 0)  # `draw_from_beta` can deal with `r=0` and `r=inf`, but not `r=NaN`.
+            x1 = np.zeros_like(r)
+            x1[keep] = draw_from_beta(r[keep], v[keep], rng=rng)
+        else:
+            x1 = draw_from_beta(r, v, rng=rng)
         qhat[i] = qhat[i-Δi] + d * x1
     return Φarr, qhat
 
