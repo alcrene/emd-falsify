@@ -47,7 +47,13 @@ def calibration_plot(calib_results: CalibrateResult,
     ## Calibration curves ##
     calib_curves = {}
     for c, data in calib_results.items():
-        data.sort(order="Bemd")
+        # # We don’t do the following because it uses the Bconf data to break ties.
+        # # If there are a lot equal values (typically happens with a too small c),
+        # # then those will get sorted and we get an artificial jump from 0 to 1
+        # data.sort(order="Bemd")
+        σ = np.argsort(data["Bemd"])  # This will only use Bemd data; order within ties remains random
+        data["Bemd"] = data["Bemd"][σ]
+        data["Bconf"] = data["Bconf"][σ]
 
         N = len(data)
         if target_bin_size is None:
