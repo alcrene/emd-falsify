@@ -313,6 +313,8 @@ def compute_Bemd(datamodel_c: Tuple[DataModel,CandidateModel,CandidateModel,floa
     emdlogginglevel = emdlogger.level
     emdlogger.setLevel(logging.ERROR)
 
+    # NB: Calibration explores some less well-fitted regions, so keeping `res` and `M` high is worthwhile
+    #     (Otherwise we get poor Bemd estimates and need more data.)
     RA_lst = emd.draw_R_samples(mixed_ppfA, synth_ppfA, c=c)
     RB_lst = emd.draw_R_samples(mixed_ppfB, synth_ppfB, c=c)
 

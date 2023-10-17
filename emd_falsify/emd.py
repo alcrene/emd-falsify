@@ -269,7 +269,7 @@ def make_empirical_risk_ppf(risk_samples: Array[float,1]):
 def draw_R_samples(mixed_risk_ppf: Callable,
                    synth_risk_ppf: Callable,
                    c: float, *,
-                   res: int=7, M: int=32, max_M: int=1024,
+                   res: int=8, M: int=128, max_M: int=1024,
                    relstderr_tol: float=2**-5,  # 2⁻⁵ ≈ 0.03
                    path_progbar: Union[Literal["auto"],None,tqdm,mp.queues.Queue]=None,
                    print_relstderr: bool=False
@@ -315,7 +315,7 @@ def draw_R_samples(mixed_risk_ppf: Callable,
     synth_risk_ppf: Quantile function of the risk using *synthetic* data samples.
     c: Proportionality constant between EMD and path sampling variance.
     res: Controls the resolution of the random quantile paths generated to compute statistics.
-       Paths have length ``2**res + 1``; typical values of `res` are 6, 7 and 8, corresponding
+       Paths have ``2**res`` segments; typical values of `res` are 6, 7 and 8, corresponding
        to paths of length 64, 128 and 256. Smaller may be useful to accelerate debugging,
        but larger values are unlikely to be useful.
     M: The minimum number of paths over which to average.
