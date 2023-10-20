@@ -1178,7 +1178,7 @@ def draw_from_beta(r: Union[Real,Array[float,1]],
 # %%
 def generate_path_hierarchical_beta(
         qstar: Callable, deltaEMD: Callable, c: float,
-        qstart: float, qend: float, res: int=7, rng=None,
+        qstart: float, qend: float, res: int=8, rng=None,
         *, Phistart: float=0., Phiend: float=1.
     ) -> Tuple[Array[float,1], Array[float,1]]:
     """
@@ -1279,12 +1279,12 @@ def generate_path_hierarchical_beta(
 
 # %% editable=true slideshow={"slide_type": ""} tags=["remove-cell"]
 def generate_quantile_paths(qstar: Callable, deltaEMD: Callable, c: float,
-                            M: int, res: int=7, rng=None,
+                            M: int, res: int=8, rng=None,
                             *, Phistart: float=0., Phiend: float=1,
                             progbar: Union[Literal["auto"],None,tqdm,"mp.queues.Queue"]="auto",
                             previous_M: int=0
                            ) -> Generator[Tuple[Array[float,1], Array[float,1]], None, None]:
-    """
+    r"""
     Generate `M` distinct quantile paths, with trajectory and variability determined
     by `qstar` and `deltaEMD`.
     Paths are generated using the hierarchical beta algorithm, with normal distributions
