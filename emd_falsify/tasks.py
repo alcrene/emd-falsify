@@ -103,7 +103,7 @@ class CalibrationDist(abc.ABC):
         # rng = <create & seed an RNG using the dist parameters as entropy>
         # for n in range(self.N):
         #     <draw calibration params using rng>
-        #     yield <data model>
+        #     yield <data model>, <candidate A>, <candidate B>, <loss A>, <loss B>
 
     def __len__(self):
         return self.N
@@ -125,11 +125,7 @@ class CalibrationDist(abc.ABC):
 # | Parameter | Description |
 # |-----------|-------------|
 # | `c_list` | The values of $c$ we want to test. |
-# | `models` | Sequence of $N$ triplets of models (data generation, candidate A, candidate B) drawn from a calibration distribution. Typically, but not necessarily, a subclass of `CalibrationDist`: any dataclass satisfying the requirements listed in `CalibrationDist` is accepted. |
-# | `riskA` | Risk function for candidate model $A$. |
-# | `riskA` | Risk function for candidate model $B$. |
-# | `synth_risk_ppfA` | REMOVED. Synthetic PPF of the risk of candidate model $A$. Almost always an instance of `scipy.interpolate.interp1d`. |
-# | `synth_risk_ppfB` | REMOVED. Synthetic PPF of the risk of candidate model $B$. Almost always an instance of `scipy.interpolate.interp1d`. |
+# | `models` | Sequence of $N$ quintuplets of models (data generation, candidate A, candidate B, loss A, loss B) drawn from a calibration distribution. Typically, but not necessarily, a subclass of `CalibrationDist`: any dataclass satisfying the requirements listed in `CalibrationDist` is accepted. |
 # | `Ldata` | Data set size used to construct the empirical PPF for models $A$ and $B$. Ideally commensurate with the actual data set used to assess models. |
 # | `Linf` | Data set size considered equivalent to "infinite". Used to compute $\B^{\mathrm{conf}}$ |
 #
@@ -180,9 +176,7 @@ class CalibrationDist(abc.ABC):
 #
 # To satisfy these requirements, the sequence `models` needs to be specified as a frozen dataclass:[^more-formats] Dataclasses for serializability, frozen for hashability. Of course they should also define `__iter__` and `__len__` – see [`CalibrationDist`](code_calibration-distribution) for an example.
 #
-# The `riskA` and `riskB` functions can be specified as either dataclasses (with a suitable `__call__` method) or [`PureFunction`s](https://scityping.readthedocs.io/en/latest/api/functions.html#scityping.functions.PureFunction). In practice we found dataclasses easier to use.
-#
-# For `synth_risk_ppfA`, the `scipy.interpolate.interp1d` is to our knowledge always the most appropriate. This is the type returned by `emd.make_empirical_ppf` and we have special support to serialize this type.
+# [CHECK: I think loss functions are unrestricted now ? Maybe impact on caching ?] The loss functions `QA` and `QB` functions can be specified as either dataclasses (with a suitable `__call__` method) or [`PureFunction`s](https://scityping.readthedocs.io/en/latest/api/functions.html#scityping.functions.PureFunction). In practice we found dataclasses easier to use.
 #
 # [^more-formats]: We use dataclasses because they are the easiest to support, but support for other formats could be added in the future.
 
@@ -267,8 +261,8 @@ class CalibrateOutput(TaskOutput):
 # - $\Bconf{}$ only needs to be computed once per data model. $\Bconf{}$ is also typically cheap (unless the data generation model is very complicated), so it is not worth dispatching to an MP subprocess.  
 
 # %% editable=true slideshow={"slide_type": ""}
-def compute_Bemd(datamodel_c: Tuple[DataModel,CandidateModel,CandidateModel,float],
-                 riskA: RiskFunction, riskB: RiskFunction,
+def compute_Bemd(datamodel_risk_c: Tuple[DataModel,CandidateModel,CandidateModel,RiskFunction,RiskFunction,float],
+                 #riskA: RiskFunction, riskB: RiskFunction,
                  #synth_ppfA: SynthPPF, synth_ppfB: SynthPPF,
                  #candidate_model_A: CandidateModel, candidate_model_B: CandidateModel,
                  Ldata):
@@ -285,7 +279,7 @@ def compute_Bemd(datamodel_c: Tuple[DataModel,CandidateModel,CandidateModel,floa
     with fixed parameters.
     """
     ## Unpack arg 1 ##  (pool.imap requires iterating over one argument only)
-    data_model, candidate_model_A, candidate_model_B, c = datamodel_c
+    data_model, candidate_model_A, candidate_model_B, QA, QB, c = datamodel_risk_c
 
     ## Generate observed data ##
     logger.debug(f"Compute Bemd - Generating {Ldata} data points."); t1 = time.perf_counter()
@@ -293,12 +287,12 @@ def compute_Bemd(datamodel_c: Tuple[DataModel,CandidateModel,CandidateModel,floa
     logger.debug(f"Compute Bemd - Done generating {Ldata} data points. Took {t2-t1:.2f} s")
 
     ## Construct synthetic quantile functions ##
-    synth_ppfA = emd.make_empirical_risk_ppf(riskA(candidate_model_A(data)))
-    synth_ppfB = emd.make_empirical_risk_ppf(riskB(candidate_model_B(data)))
+    synth_ppfA = emd.make_empirical_risk_ppf(QA(candidate_model_A(data)))
+    synth_ppfB = emd.make_empirical_risk_ppf(QB(candidate_model_B(data)))
 
     ## Construct mixed quantile functions ##
-    mixed_ppfA = emd.make_empirical_risk_ppf(riskA(data))
-    mixed_ppfB = emd.make_empirical_risk_ppf(riskB(data))
+    mixed_ppfA = emd.make_empirical_risk_ppf(QA(data))
+    mixed_ppfB = emd.make_empirical_risk_ppf(QB(data))
 
     ## Draw sets of expected risk values (R) for each model ##
                      
@@ -328,10 +322,10 @@ def compute_Bemd(datamodel_c: Tuple[DataModel,CandidateModel,CandidateModel,floa
     Bemd = np.less.outer(RA_lst, RB_lst).mean()
 
     ## Return alongside the experiment key
-    return (data_model, c), Bemd
+    return (data_model, QA, QB, c), Bemd
 
 # %% editable=true slideshow={"slide_type": ""}
-def compute_Bconf(data_model, riskA, riskB, Linf):
+def compute_Bconf(data_model, QA, QB, Linf):
     """Compute the true Bconf (using a quasi infinite number of samples)"""
     
     # Generate samples
@@ -342,8 +336,8 @@ def compute_Bconf(data_model, riskA, riskB, Linf):
     
     # Compute Bconf
     logger.debug("Compute Bconf – Evaluating expected risk on 'infinite' dataset"); t1 = time.perf_counter()
-    RA = riskA(data).mean()
-    RB = riskB(data).mean()
+    RA = QA(data).mean()
+    RB = QB(data).mean()
     t2 = time.perf_counter()
     logger.debug(f"Compute Bconf – Done evaluating risk. Took {t2-t1:.2f} s")
     return RA < RB
@@ -360,10 +354,10 @@ class Calibrate:
         self,
         c_list     : List[float],
         #data_models: Sequence[DataModel],
-        models     : Dataclass,
+        models_Qs: Dataclass,
         #riskA     : RiskFunction
-        riskA      : Union[Dataclass,PureFunction],
-        riskB      : Union[Dataclass,PureFunction],
+        # riskA      : Union[Dataclass,PureFunction],
+        # riskB      : Union[Dataclass,PureFunction],
         #synth_risk_ppf: SynthPPF
         #synth_risk_ppfA  : Union[emd.interp1d, PureFunction],
         #synth_risk_ppfB  : Union[emd.interp1d, PureFunction],
@@ -387,9 +381,9 @@ class Calibrate:
             Each data model will result in one (Bconf, Bemd) pair in the output results.
             If this iterable is sized, progress bars will estimate the remaining compute time.
         
-        riskA, riskB:
+        #riskA, riskB:
         
-        synth_riskA, synth_riskB:
+        #synth_riskA, synth_riskB:
         
         Ldata: Number of data points from the true model to generate when computing Bemd.
             This should be chosen commensurate with the size of the dataset that will be analyzed,
@@ -413,10 +407,10 @@ class Calibrate:
 # Bind arguments to the `Bemd` function, so it only take one argument (`datamodel_c`) as required by `imap`.
 
         # %% editable=true slideshow={"slide_type": ""} tags=["skip-execution"]
-        compute_Bemd_partial = partial(
-            compute_Bemd, riskA=riskA, riskB=riskB,
-                          #synth_ppfA=synth_risk_ppfA, synth_ppfB=synth_risk_ppfB,
-                          Ldata=Ldata)
+        compute_Bemd_partial = partial(compute_Bemd, Ldata=Ldata)
+            # compute_Bemd, riskA=riskA, riskB=riskB,
+            #               #synth_ppfA=synth_risk_ppfA, synth_ppfB=synth_risk_ppfB,
+            #               Ldata=Ldata)
 
 # %% [markdown]
 # Define dictionaries into which we will accumulate the results of the $B^{\mathrm{EMD}}$ and $B_{\mathrm{conf}}$ calculations.
@@ -432,7 +426,7 @@ class Calibrate:
 
         # %% editable=true slideshow={"slide_type": ""} tags=["skip-execution"]
         try:
-            N = len(models)
+            N = len(models_Qs)
         except (TypeError, AttributeError):  # Typically TypeError, but AttributeError seems also plausible
             logger.info("Data model iterable has no length: it will not be possible to estimate the remaining computation time.")
             total = None
@@ -446,40 +440,36 @@ class Calibrate:
 # Run the experiments. Since there are a lot of them, and they each take a few minutes, we use multiprocessing to run them in parallel.
 
         # %% editable=true slideshow={"slide_type": ""} tags=["skip-execution"]
+        models_c_gen = ((*models_Qs, c)
+                        for models_Qs in models_Qs
+                        for c in c_list)
+
         if ncores > 1:
             with mp.Pool(ncores) as pool:
-                # Chunk size calculated following Pool's algorithm (See https://stackoverflow.com/questions/53751050/multiprocessing-understanding-logic-behind-chunksize/54813527#54813527)
+                # Chunk size calculated following mp.Pool's algorithm (See https://stackoverflow.com/questions/53751050/multiprocessing-understanding-logic-behind-chunksize/54813527#54813527)
                 # (Naive approach would be total/ncores. This is most efficient if all taskels take the same time. Smaller chunks == more flexible job allocation, but more overhead)
                 chunksize, extra = divmod(N, ncores*6)
                 if extra:
                     chunksize += 1
-                Bemd_it = pool.imap(compute_Bemd_partial,
-                                    self.model_c_gen(Bemd_results, Bconf_results),
+                Bemd_it = pool.imap(compute_Bemd_partial, models_c_gen,
                                     chunksize=chunksize)
-                for (data_model, c), Bemd_res in Bemd_it:
-                # for (data_model, c), Bemd_res in zip(                                     # NB: Both `models_c_gen` generators
-                #         self.model_c_gen(Bemd_results, Bconf_results),               # always yield the same tuples,
-                #         Bemd_it):                                                     # because we only update Bemd_results
-                    progbar.update(1)        # Updating first more reliable w/ ssh    # after drawing from the second generator
+                for (data_model, QA, QB, c), Bemd_res in Bemd_it:
+                    progbar.update(1)        # Updating first more reliable w/ ssh
                     Bemd_results[data_model, c] = Bemd_res
                     if data_model not in Bconf_results:
-                        Bconf_results[data_model] = compute_Bconf(data_model, riskA, riskB, Linf)
+                        Bconf_results[data_model] = compute_Bconf(data_model, QA, QB, Linf)
 
 # %% [markdown] editable=true slideshow={"slide_type": ""}
 # Variant without multiprocessing:
 
         # %% editable=true slideshow={"slide_type": ""}
         else:
-            Bemd_it = (compute_Bemd_partial(arg)
-                       for arg in self.model_c_gen(Bemd_results, Bconf_results))
-            for (data_model, c), Bemd_res in Bemd_it:
-            # for (data_model, c), Bemd_res in zip(                                     # NB: Both `model_c_gen` generators
-            #         self.model_c_gen(Bemd_results, Bconf_results),               # always yield the same tuples,
-            #         Bemd_it):                                                     # because we only update Bemd_results
-                progbar.update(1)        # Updating first more reliable w/ ssh    # after drawing from the second generator
+            Bemd_it = (compute_Bemd_partial(arg) for arg in models_c_gen)
+            for (data_model, QA, QB, c), Bemd_res in Bemd_it:
+                progbar.update(1)        # Updating first more reliable w/ ssh
                 Bemd_results[data_model, c] = Bemd_res
                 if data_model not in Bconf_results:
-                    Bconf_results[data_model] = compute_Bconf(data_model, riskA, riskB, Linf)
+                    Bconf_results[data_model] = compute_Bconf(data_model, QA, QB, Linf)
 
 # %% [markdown] editable=true slideshow={"slide_type": ""}
 # Close progress bar:
@@ -492,6 +482,13 @@ class Calibrate:
 #
 # If we serialize the whole dict, most of the space is taken up by serializing the models in the keys. Not only is this wasteful – we can easily recreate them with `model_c_gen` – but it also makes deserializing the results quite slow.
 # So instead we return just the values as a list, and provide an `unpack_result` method which reconstructs the result dictionary.
+# :::{caution}
+# This assumes that we get the same models when we rebuild them within `unpack_result`.
+# Two ways this assumption can be violated:
+# - The user’s code for `models_Qs` has changed. (Unless the user used a type
+#   which serialises to completely self-contained data.)
+# - The model generation is non-reproducible. (E.g. it uses an unseeded RNG).
+# :::
 
         # %% editable=true slideshow={"slide_type": ""} tags=["skip-execution"]
         return dict(Bemd =list(Bemd_results.values()),
@@ -503,13 +500,19 @@ class Calibrate:
     # %% editable=true slideshow={"slide_type": ""} tags=["skip-execution"]
     def unpack_results(self, result: Calibrate.Outputs.result_type
                       ) -> CalibrateResult:
+        assert len(result.Bemd) == len(self.c_list) * len(result.Bconf), \
+            "`result` argument seems not to have been created with this task."
         # Reconstruct the dictionary as it was at the end of task execution
         Bemd_dict = {}; Bemd_it = iter(result.Bemd)
         Bconf_dict = {}; Bconf_it = iter(result.Bconf)
-        for data_model in self.taskinputs.models:
-            Bconf_dict[data_model] = next(Bconf_it)
-            for c in self.taskinputs.c_list:
-                Bemd_dict[(data_model, c)] = next(Bemd_it)
+        for i in range(len(result.Bconf)):         # We don’t actually need the models
+            Bconf_dict[i] = next(Bconf_it)         # => we just use integer ids
+            for c in self.taskinputs.c_list:       # This avoids unnecessarily
+                Bemd_dict[(i, c)] = next(Bemd_it)  # instantiating models.
+        # for data_model in self.taskinputs.models:
+        #     Bconf_dict[data_model] = next(Bconf_it)
+        #     for c in self.taskinputs.c_list:
+        #         Bemd_dict[(data_model, c)] = next(Bemd_it)
         # Package results into a record arrays – much easier to sort and plot
         calib_curve_data = {c: [] for c in self.taskinputs.c_list}
         for data_model, c in Bemd_dict:
@@ -526,17 +529,17 @@ class Calibrate:
 # `task.model_c_gen` yields combined `(data_model, c)` tuples by iterating over both `models` and `c_list`. The reason we implement this in its own method is so we can recreate the sequence of models and $c$ values in `unpack_results`: this way we only need to store the sequence of $\Bemd{}$ and $\Bconf{}$ values for each (model, $c$) pair, but not the models themselves.
 
     # %% editable=true slideshow={"slide_type": ""} tags=["skip-execution"]
-    def model_c_gen(self, Bemd_results: "dict|set", Bconf_results: "dict|set"):
-        """Return an iterator over data models and c values.
-        The two additional arguments `Bemd_results` and `Bconf_results` should be sets of
-        *already computed* results. At the moment this is mostly a leftover from a previous
-        implementation, before this function was made a *Task* — in the current 
-        implementation, the task always behaves as though empty dictionaries were passed.
-        """
-        for data_model, modelA, modelB in self.taskinputs.models:    # Using taskinputs allows us to call `model_c_gen`
-            for c in self.taskinputs.c_list:             # after running the task to recreate the keys.
-                if (data_model, c) not in Bemd_results:
-                    yield (data_model, modelA, modelB, c)
-                else:                                    # Skip results which are already loaded
-                    assert data_model in Bconf_results
+    # def model_c_gen(self, Bemd_results: "dict|set", Bconf_results: "dict|set"):
+    #     """Return an iterator over data models and c values.
+    #     The two additional arguments `Bemd_results` and `Bconf_results` should be sets of
+    #     *already computed* results. At the moment this is mostly a leftover from a previous
+    #     implementation, before this function was made a *Task* — in the current 
+    #     implementation, the task always behaves as though empty dictionaries were passed.
+    #     """
+    #     for data_model, modelA, modelB in self.taskinputs.models:    # Using taskinputs allows us to call `model_c_gen`
+    #         for c in self.taskinputs.c_list:             # after running the task to recreate the keys.
+    #             if (data_model, c) not in Bemd_results:
+    #                 yield (data_model, modelA, modelB, c)
+    #             else:                                    # Skip results which are already loaded
+    #                 assert data_model in Bconf_results
 
