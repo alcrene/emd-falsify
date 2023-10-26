@@ -21,8 +21,8 @@ from scityping import Config as ScitypingConfig
 class Config(ValConfig):
     __default_config_path__   = "defaults.cfg"
 
-    # class paths:
-    #     figuresdir : Path
+    class paths:
+        figures : Path
 
     #     _ensure_dir_exists = validator("figuresdir", allow_reuse=True
     #                                   )(ensure_dir_exists)

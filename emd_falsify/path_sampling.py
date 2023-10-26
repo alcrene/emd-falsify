@@ -299,7 +299,7 @@ def f_mid(lnα, v, _exp=np.exp, _log=np.log, polygamma=scipy.special.polygamma):
 # #glue("fig_polygamma", fig, display=None)
 
 # %% tags=["remove-cell", "active-ipynb"]
-# path = config.paths.figuresdir/f"path-sampling_polygamma"
+# path = config.paths.figures/f"path-sampling_polygamma"
 # hv.save(fig, path.with_suffix(".svg"), backend="matplotlib")
 # hv.save(fig, path.with_suffix(".pdf"), backend="matplotlib")
 
@@ -412,10 +412,10 @@ def f_mid(lnα, v, _exp=np.exp, _log=np.log, polygamma=scipy.special.polygamma):
 #     within the notebook.
 #     """
 #     # Special cases for extreme values of r
-#     if r == 0:
-#         return scipy.stats.bernouilli(0)  # Dirac delta at 0
+#     if r < 1e-12:
+#         return scipy.stats.bernoulli(0)  # Dirac delta at 0
 #     elif r > 1e12:
-#         return scipy.stats.bernouilli(1)  # Dirac delta at 1
+#         return scipy.stats.bernoulli(1)  # Dirac delta at 1
 #     # Special cases for extreme values of v
 #     elif v < 1e-8:
 #         return get_beta_rv(r, 1e-8)
@@ -475,7 +475,7 @@ def _draw_from_beta_scalar(r: Real, v: Real, rng: RNGenerator, n_samples: int=1,
     rng = np.random.default_rng(rng)  # No-op if `rng` is already a Generator
     size = None if n_samples == 1 else (*_shape(r), n_samples)
     # Special cases for extreme values of r
-    if r == 0:
+    if r < 1e-12:
         special_val = 1           # EXIT AT END
     elif r > 1e12:
         special_val = 0           # EXIT AT END
@@ -656,6 +656,7 @@ def draw_from_beta(r: Union[Real,Array[float,1]],
 #              (2.2715995006941436, 6.278153793994013e-08),
 #              (2.271457193328191, 6.075242708902806e-08),
 #              (2.269182419251242, 6.794061846449025e-08),
+#              (2.691033486949275e-17, 0.02930210834055045)
 #             ],
 #         itertools.cycle(config.viz.colors.bright.cycle)):
 #     rv = get_beta_rv(r, v)
