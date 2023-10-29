@@ -261,7 +261,7 @@ class CalibrateOutput(TaskOutput):
 # - $\Bconf{}$ only needs to be computed once per data model. $\Bconf{}$ is also typically cheap (unless the data generation model is very complicated), so it is not worth dispatching to an MP subprocess.  
 
 # %% editable=true slideshow={"slide_type": ""}
-def compute_Bemd(datamodel_risk_c: Tuple[DataModel,CandidateModel,CandidateModel,RiskFunction,RiskFunction,float],
+def compute_Bemd(datamodel_risk_c: Tuple[int,DataModel,CandidateModel,CandidateModel,RiskFunction,RiskFunction,float],
                  #riskA: RiskFunction, riskB: RiskFunction,
                  #synth_ppfA: SynthPPF, synth_ppfB: SynthPPF,
                  #candidate_model_A: CandidateModel, candidate_model_B: CandidateModel,
@@ -279,7 +279,7 @@ def compute_Bemd(datamodel_risk_c: Tuple[DataModel,CandidateModel,CandidateModel
     with fixed parameters.
     """
     ## Unpack arg 1 ##  (pool.imap requires iterating over one argument only)
-    data_model, candidate_model_A, candidate_model_B, QA, QB, c = datamodel_risk_c
+    i, data_model, candidate_model_A, candidate_model_B, QA, QB, c = datamodel_risk_c
 
     ## Generate observed data ##
     logger.debug(f"Compute Bemd - Generating {Ldata} data points."); t1 = time.perf_counter()
@@ -322,7 +322,7 @@ def compute_Bemd(datamodel_risk_c: Tuple[DataModel,CandidateModel,CandidateModel
     Bemd = np.less.outer(RA_lst, RB_lst).mean()
 
     ## Return alongside the experiment key
-    return (data_model, QA, QB, c), Bemd
+    return (i, data_model, QA, QB, c), Bemd
 
 # %% editable=true slideshow={"slide_type": ""}
 def compute_Bconf(data_model, QA, QB, Linf):
@@ -440,8 +440,8 @@ class Calibrate:
 # Run the experiments. Since there are a lot of them, and they each take a few minutes, we use multiprocessing to run them in parallel.
 
         # %% editable=true slideshow={"slide_type": ""} tags=["skip-execution"]
-        models_c_gen = ((*models_Qs, c)
-                        for models_Qs in models_Qs
+        models_c_gen = ((i, *models_Qs, c)  # i is used as an id for each different model/Qs set
+                        for i, models_Qs in enumerate(models_Qs)
                         for c in c_list)
 
         if ncores > 1:
@@ -453,11 +453,11 @@ class Calibrate:
                     chunksize += 1
                 Bemd_it = pool.imap(compute_Bemd_partial, models_c_gen,
                                     chunksize=chunksize)
-                for (data_model, QA, QB, c), Bemd_res in Bemd_it:
+                for (i, data_model, QA, QB, c), Bemd_res in Bemd_it:
                     progbar.update(1)        # Updating first more reliable w/ ssh
-                    Bemd_results[data_model, c] = Bemd_res
-                    if data_model not in Bconf_results:
-                        Bconf_results[data_model] = compute_Bconf(data_model, QA, QB, Linf)
+                    Bemd_results[i, c] = Bemd_res
+                    if i not in Bconf_results:
+                        Bconf_results[i] = compute_Bconf(data_model, QA, QB, Linf)
 
 # %% [markdown] editable=true slideshow={"slide_type": ""}
 # Variant without multiprocessing:
@@ -465,11 +465,11 @@ class Calibrate:
         # %% editable=true slideshow={"slide_type": ""}
         else:
             Bemd_it = (compute_Bemd_partial(arg) for arg in models_c_gen)
-            for (data_model, QA, QB, c), Bemd_res in Bemd_it:
+            for (i, data_model, QA, QB, c), Bemd_res in Bemd_it:
                 progbar.update(1)        # Updating first more reliable w/ ssh
-                Bemd_results[data_model, c] = Bemd_res
-                if data_model not in Bconf_results:
-                    Bconf_results[data_model] = compute_Bconf(data_model, QA, QB, Linf)
+                Bemd_results[i, c] = Bemd_res
+                if i not in Bconf_results:
+                    Bconf_results[i] = compute_Bconf(data_model, QA, QB, Linf)
 
 # %% [markdown] editable=true slideshow={"slide_type": ""}
 # Close progress bar:
@@ -508,16 +508,16 @@ class Calibrate:
         for i in range(len(result.Bconf)):         # We don’t actually need the models
             Bconf_dict[i] = next(Bconf_it)         # => we just use integer ids
             for c in self.taskinputs.c_list:       # This avoids unnecessarily
-                Bemd_dict[(i, c)] = next(Bemd_it)  # instantiating models.
+                Bemd_dict[i, c] = next(Bemd_it)  # instantiating models.
         # for data_model in self.taskinputs.models:
         #     Bconf_dict[data_model] = next(Bconf_it)
         #     for c in self.taskinputs.c_list:
         #         Bemd_dict[(data_model, c)] = next(Bemd_it)
-        # Package results into a record arrays – much easier to sort and plot
+        # Package results into a record arrays – easier to sort and plot
         calib_curve_data = {c: [] for c in self.taskinputs.c_list}
-        for data_model, c in Bemd_dict:
+        for i, c in Bemd_dict:
             calib_curve_data[c].append(
-                (Bemd_dict[(data_model, c)], Bconf_dict[data_model]) )
+                (Bemd_dict[i, c], Bconf_dict[i]) )
 
         #return UnpackedCalibrateResult(Bemd=Bemd_dict, Bconf=Bconf_dict)
         return {c: np.array(calib_curve_data[c], dtype=calib_point_dtype)
