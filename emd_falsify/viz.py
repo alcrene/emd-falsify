@@ -17,11 +17,11 @@ dash_patterns = ["dotted", "dashed", "solid"]
 
 class CalibrationPlotElements(NamedTuple):
     calibration_curves: hv.Overlay
-    prohibited_area   : hv.Area
+    prohibited_areas   : hv.Area
     discouraged_areas : hv.Overlay
 
     def _repr_mimebundle_(self, *args, **kwds):
-        return (prohibited_area * discouraged_areas * calibration_curves)._repr_mimebundle_(*args, **kwds)
+        return (self.prohibited_areas * self.discouraged_areas * self.calibration_curves)._repr_mimebundle_(*args, **kwds)
 
 def calibration_plot(calib_results: CalibrateResult,
                      target_bin_size: Optional[int]=None
@@ -84,7 +84,7 @@ def calibration_plot(calib_results: CalibrateResult,
 
     ## Prohibited & discouraged areas ##
     # Prohibited area
-    prohibited_area = hv.Area([(x, x, 1-x) for x in np.linspace(0, 1, 32)],
+    prohibited_areas = hv.Area([(x, x, 1-x) for x in np.linspace(0, 1, 32)],
                               kdims=["Bemd"], vdims=["Bconf", "Bconf2"],
                               group="overconfident area")
 
@@ -96,17 +96,17 @@ def calibration_plot(calib_results: CalibrateResult,
                          kdims=["Bemd"], vdims=["Bconf", "Bconf2"],
                          group="undershoot area")
 
-    prohibited_area = prohibited_area.redim.range(Bemd=(0,1), Bconf=(0,1))
+    prohibited_areas = prohibited_areas.redim.range(Bemd=(0,1), Bconf=(0,1))
     discouraged_area_1 = discouraged_area_1.redim.range(Bemd=(0,1), Bconf=(0,1))
     discouraged_area_2 = discouraged_area_2.redim.range(Bemd=(0,1), Bconf=(0,1))
 
-    prohibited_area.opts(hv.opts.Area(**config.viz.prohibited_area))
+    prohibited_areas.opts(hv.opts.Area(**config.viz.prohibited_area))
     discouraged_area_1.opts(hv.opts.Area(**config.viz.discouraged_area))
     discouraged_area_2.opts(hv.opts.Area(**config.viz.discouraged_area))
 
     ## Combine & return ##
     return CalibrationPlotElements(
-        calib_hmap, prohibited_area, discouraged_area_1*discouraged_area_2)
+        calib_hmap, prohibited_areas, discouraged_area_1*discouraged_area_2)
 
 
 # sanitize = hv.core.util.sanitize_identifier_fn
