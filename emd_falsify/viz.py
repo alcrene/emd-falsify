@@ -23,6 +23,26 @@ class CalibrationPlotElements(NamedTuple):
     def _repr_mimebundle_(self, *args, **kwds):
         return (self.prohibited_areas * self.discouraged_areas * self.calibration_curves)._repr_mimebundle_(*args, **kwds)
 
+def calibration_bins(calib_results: CalibrateResult,
+                     target_bin_size: Optional[int]=None):
+    """Return the bin edges for the histograms produced by `calibration_plot`.
+    
+    .. Note:: These are generally *not* good bin edges for plotting a histogram
+    of calibration results: by design, they will produce an almost perfectly
+    flat histogram.
+    """
+    bin_edges = {}
+    for c, data in calib_results.items():
+        i = 0
+        Bemd = np.sort(data["Bemd"])
+        edges = [Bemd[0]]
+        for w in utils.get_bin_sizes(len(Bemd), target_bin_size)[:-1]:
+            i += w
+            edges.append(Bemd[i:i+2].mean())
+        edges.append(Bemd[-1])
+        bin_edges[c] = edges
+    return bin_edges
+
 def calibration_plot(calib_results: CalibrateResult,
                      target_bin_size: Optional[int]=None
                     ) -> CalibrationPlotElements:
@@ -55,22 +75,9 @@ def calibration_plot(calib_results: CalibrateResult,
         data["Bemd"] = data["Bemd"][σ]
         data["Bconf"] = data["Bconf"][σ]
 
-        N = len(data)
-        if target_bin_size is None:
-            # Try to get 16 points for the curve, but keep bin sizes between 16 and 64.
-            # (So if there are too few samples, we will get fewer curve points but each
-            #  will be the average of at least 16 samples)
-            # The target of 16 points for the curve was chosen based on a plot of tanh
-            # between -2 and +2: kinks are barely noticeable. (We want the smallest
-            # number of points since then each point has more statistical power.)
-            # The bin size limits 16 and 64 are more arbitrary.
-            # >>> xarr = np.linspace(-2, 2, 16)
-            # >>> hv.Curve(zip(xarr, np.tanh(xarr))).opts(fig_inches=5)
-            target_bin_size = np.clip(N//16, 16, 64).astype(int)
-
         curve_data = []
         i = 0
-        for j, w in enumerate(utils.get_bin_sizes(N, target_bin_size)):
+        for w in utils.get_bin_sizes(len(data), target_bin_size):
             curve_data.append((data[i:i+w]["Bemd"].mean(),
                                data[i:i+w]["Bconf"].mean()))
             i += w

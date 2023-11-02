@@ -31,12 +31,15 @@ logger = logging.getLogger(__name__)
 
 # ## `get_bin_sizes`
 
-def get_bin_sizes(total_points, target_bin_size) -> Array[int,1]:
+def get_bin_sizes(total_points, target_bin_size=None) -> Array[int,1]:
     """
-    Return an array of bin widths, each approximately equal to `target_bin_size`
+    Return an array of bin sizes, each approximately equal to `target_bin_size`
     and such that their sum is exactly equal to `total_points`.
     This can be used to construct histograms with bars of different width but
     comparable statistical power.
+
+    .. Note: "Bin size" refers to the number of points in a bin, rather than
+       their width on an axis.
     
     - If `target_bin_size` does not divide `total_points` exactly, some bins
       will be larger by 1.
@@ -46,6 +49,18 @@ def get_bin_sizes(total_points, target_bin_size) -> Array[int,1]:
       uniformly throughout the list.
     - The distribution of larger bins is deterministic: calling the function
       twice with the same arguments will always return the same list.
+
+    .. rubric:: Auto-determined bin sizes
+       When `target_bin_size` is `None`, a heuristic is used to choose a value.
+       This heuristic tries to get 16 bins, but will keep bin sizes between 16 and 64.
+       (So if there are too few samples, we will get fewer curve points but each
+        will be the average of at least 16 samples)
+       The target of 16 bins was chosen based on a plot of tanh between -2 and +2:
+       with 16 points, kinks are barely noticeable.
+       (Choosing the smallest number of bins gives each bin the most statistical power.)
+       >>> xarr = np.linspace(-2, 2, 16)
+       >>> hv.Curve(zip(xarr, np.tanh(xarr))).opts(fig_inches=5)
+       The bin size limits of 16 and 64 are more arbitrary.
       
     Example
     -------
@@ -57,6 +72,10 @@ def get_bin_sizes(total_points, target_bin_size) -> Array[int,1]:
     243 20 243 [20 20 20 21 20 20 20 21 20 20 20 21] 2
     239 12 239 [12 13 12 13 12 13 13 12 13 12 13 12 13 13 12 13 12 13 13] 2
     """
+    if target_bin_size is None:
+        # See comment in docstring
+        target_bin_size = np.clip(total_points//16, 16, 64).astype(int)
+
     report_err_msg = "This is most likely an unaccounted for corner case with `get_bin_sizes`; please report it along with the values for `total_points` and `target_bin_size` you used."
     nbins = total_points // target_bin_size
     total_extra = total_points % target_bin_size
