@@ -342,6 +342,43 @@ def compute_Bconf(data_model, QA, QB, Linf):
     logger.debug(f"Compute Bconf – Done evaluating risk. Took {t2-t1:.2f} s")
     return RA < RB
 
+# %% editable=true slideshow={"slide_type": ""}
+def compute_Bemd_and_maybe_Bconf(datamodel_risk_c, Ldata, Linf, c_conf):
+    """Wrapper which calls both `compute_Bemd` and `compute_Bconf`.
+    The latter is only called if `c` matches `c_conf`. 
+    
+    The reason for this wrapper is to better utilize multiprocessing threads,
+    by executing Bconf with the same MP threads as Bemd while still ensuring
+    that Bconf is not executed more often than needed.
+    Since Bemd is executed once for every `c` value in `c_list`, we choose
+    one value in `c_list` and make that special: whenever we compute Bemd for
+    that `c`, we also compute Bconf.
+
+    This has three related benefits:
+    - If there is caching that might reuse computations between compute_Bemd
+      and compute_Bconf (e.g. a data generation function decorated with @cache),
+      this increases the chances 
+    - It avoids having to execute Bconf in the main process, which can have
+      adverse effects if Bconf involves significant computation. If we have
+      n cores and n MP processes, then having computation occuring in the main
+      process is like having n+1 MP processes, which will lead to inefficient
+      switching.
+    - If the Bconf computations are so significant (less than n times faster
+      than Bemd), then they become a bottleneck and cause `imap` to accumulate
+      a queue of results. Since this is effectively an unbounded cache, if
+      those results require substantial memory, this can cause the entire
+      computation to crash because it exceeds available memory.
+    """
+    # NB: Since `data_model` is consumed within this function, even if there
+    #     were a bottleneck with imap, it should not exceed memory:
+    #     i, c, Bemd and Bconf are all small scalars.
+    (i, data_model, QA, QB, c), Bemd = compute_Bemd(datamodel_risk_c, Ldata)
+    if c == c_conf:
+        Bconf = compute_Bconf(data_model, QA, QB, Linf)
+    else:
+        Bconf = None
+    return i, c, Bemd, Bconf
+
 
 # %% [markdown] editable=true slideshow={"slide_type": ""}
 # ### Task definition
@@ -407,10 +444,9 @@ class Calibrate:
 # Bind arguments to the `Bemd` function, so it only take one argument (`datamodel_c`) as required by `imap`.
 
         # %% editable=true slideshow={"slide_type": ""} tags=["skip-execution"]
-        compute_Bemd_partial = partial(compute_Bemd, Ldata=Ldata)
-            # compute_Bemd, riskA=riskA, riskB=riskB,
-            #               #synth_ppfA=synth_risk_ppfA, synth_ppfB=synth_risk_ppfB,
-            #               Ldata=Ldata)
+        # compute_Bemd_partial = partial(compute_Bemd, Ldata=Ldata)
+        compute_partial = partial(compute_Bemd_and_maybe_Bconf,
+                                  Ldata=Ldata, Linf=Linf, c_conf=c_list[0])
 
 # %% [markdown]
 # Define dictionaries into which we will accumulate the results of the $B^{\mathrm{EMD}}$ and $B_{\mathrm{conf}}$ calculations.
@@ -451,25 +487,38 @@ class Calibrate:
                 chunksize, extra = divmod(N, ncores*6)
                 if extra:
                     chunksize += 1
-                Bemd_it = pool.imap(compute_Bemd_partial, models_c_gen,
-                                    chunksize=chunksize)
-                for (i, data_model, QA, QB, c), Bemd_res in Bemd_it:
+                Bemd_Bconf_it = pool.imap(compute_partial, models_c_gen,
+                                          chunksize=chunksize)
+                for (i, c, Bemd, Bconf) in Bemd_Bconf_it:
                     progbar.update(1)        # Updating first more reliable w/ ssh
-                    Bemd_results[i, c] = Bemd_res
-                    if i not in Bconf_results:
-                        Bconf_results[i] = compute_Bconf(data_model, QA, QB, Linf)
+                    Bemd_results[i, c] = Bemd
+                    if Bconf is not None:
+                        Bconf_results[i] = Bconf
+                # Bemd_it = pool.imap(compute_Bemd_partial, models_c_gen,
+                #                     chunksize=chunksize)
+                # for (i, data_model, QA, QB, c), Bemd_res in Bemd_it:
+                #     progbar.update(1)        # Updating first more reliable w/ ssh
+                #     Bemd_results[i, c] = Bemd_res
+                #     if i not in Bconf_results:
+                #         Bconf_results[i] = compute_Bconf(data_model, QA, QB, Linf)
 
 # %% [markdown] editable=true slideshow={"slide_type": ""}
 # Variant without multiprocessing:
 
         # %% editable=true slideshow={"slide_type": ""}
         else:
-            Bemd_it = (compute_Bemd_partial(arg) for arg in models_c_gen)
-            for (i, data_model, QA, QB, c), Bemd_res in Bemd_it:
-                progbar.update(1)        # Updating first more reliable w/ ssh
-                Bemd_results[i, c] = Bemd_res
-                if i not in Bconf_results:
-                    Bconf_results[i] = compute_Bconf(data_model, QA, QB, Linf)
+            Bemd_Bconf_it = (compute_partial(arg) for arge in models_c_gen)
+            for (i, c, Bemd, Bconf) in Bemd_Bconf_it:
+                progbar.update(1)
+                Bemd_results[i, c] = Bemd
+                if Bconf is not None:
+                    Bconf_results[i] = Bconf
+            # Bemd_it = (compute_Bemd_partial(arg) for arg in models_c_gen)
+            # for (i, data_model, QA, QB, c), Bemd_res in Bemd_it:
+            #     progbar.update(1)        # Updating first more reliable w/ ssh
+            #     Bemd_results[i, c] = Bemd_res
+            #     if i not in Bconf_results:
+            #         Bconf_results[i] = compute_Bconf(data_model, QA, QB, Linf)
 
 # %% [markdown] editable=true slideshow={"slide_type": ""}
 # Close progress bar:
