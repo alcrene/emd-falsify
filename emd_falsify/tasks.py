@@ -481,7 +481,7 @@ class Calibrate:
                         for c in c_list)
 
         if ncores > 1:
-            with mp.Pool(ncores) as pool:
+            with mp.Pool(ncores, maxtasksperchild=config.mp.maxtasksperchild) as pool:
                 # Chunk size calculated following mp.Pool's algorithm (See https://stackoverflow.com/questions/53751050/multiprocessing-understanding-logic-behind-chunksize/54813527#54813527)
                 # (Naive approach would be total/ncores. This is most efficient if all taskels take the same time. Smaller chunks == more flexible job allocation, but more overhead)
                 chunksize, extra = divmod(N, ncores*6)

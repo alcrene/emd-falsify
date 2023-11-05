@@ -32,6 +32,7 @@ class Config(ValConfig):
 
     class mp:
         max_cores: int
+        maxtasksperchild: Union[int,None]
 
     class caching:
         """
