@@ -487,8 +487,8 @@ class Calibrate:
                 chunksize, extra = divmod(N, ncores*6)
                 if extra:
                     chunksize += 1
-                Bemd_Bconf_it = pool.imap(compute_partial, models_c_gen,
-                                          chunksize=chunksize)
+                Bemd_Bconf_it = pool.imap_unordered(compute_partial, models_c_gen,
+                                                    chunksize=chunksize)
                 for (i, c, Bemd, Bconf) in Bemd_Bconf_it:
                     progbar.update(1)        # Updating first more reliable w/ ssh
                     Bemd_results[i, c] = Bemd
@@ -540,8 +540,9 @@ class Calibrate:
 # :::
 
         # %% editable=true slideshow={"slide_type": ""} tags=["skip-execution"]
-        return dict(Bemd =list(Bemd_results.values()),
-                    Bconf=list(Bconf_results.values()))
+        # NB: Don’t just use list(Bemd_results.values()): order of dictionary is not guaranteed
+        return dict(Bemd =[Bemd_results [i,c] for i in range(len(models_Qs)) for c in c_list],
+                    Bconf=[Bconf_results[i]   for i in range(len(models_Qs))])
 
 # %% [markdown] editable=true slideshow={"slide_type": ""}
 # > **END OF `Calibrate.__call__`**
