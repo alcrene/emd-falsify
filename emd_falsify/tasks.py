@@ -66,20 +66,39 @@ import emd_falsify as emd
 logger = logging.getLogger(__name__)
 
 # %% editable=true slideshow={"slide_type": ""}
-__all__ = ["Calibrate", "CalibrationDist", "CalibrateOutput"]
+__all__ = ["Calibrate", "EpistemicDist", "CalibrateOutput"]
 
 
 # %% [markdown] editable=true slideshow={"slide_type": ""}
 # (code_calibration-distribution)=
-# ## Calibration distribution
+# ## Epistemic distribution
+
+# %% editable=true slideshow={"slide_type": ""} tags=["skip-execution"]
+@dataclass
+class Experiment:
+    """Reference implementation for an experiment container;
+    represents one sample ω from the epistemic distribution.
+
+    Users may use this dataclass, or define their own: Experiment containers
+    need not subclass this class, but must provide the same attributes.
+
+    One reason to use a custom experiment class is to ensure that heavy
+    computations (like fitting the candidate models) happen on the child
+    MP processes.
+    """
+    data_model: DataModel
+    candidateA: CandidateModel
+    candidateB: CandidateModel
+    QA: RiskFunction
+    QB: RiskFunction
 
 # %% editable=true slideshow={"slide_type": ""}
 @dataclass(frozen=True)
-class CalibrationDist(abc.ABC):
+class EpistemicDist(abc.ABC):
     """Generic template for a calibration distribution:
     
     in effect a calibration distribution with no calibration parameters.
-    For actual use you need to subclass `CalibrationDist` and extend it with 
+    For actual use you need to subclass `EpistemicDist` and extend it with 
     parameters relevant to your models.
 
     Using this class is not actually required for the `Calibrate` task: any
@@ -98,7 +117,7 @@ class CalibrationDist(abc.ABC):
     N: int|Literal[np.inf]     # Number of data models, i.e. length of iterator   
     
     @abc.abstractmethod
-    def __iter__(self):
+    def __iter__(self) -> Experiment:
         raise NotImplementedError
         # rng = <create & seed an RNG using the dist parameters as entropy>
         # for n in range(self.N):
@@ -109,7 +128,7 @@ class CalibrationDist(abc.ABC):
         return self.N
     
     def generate(self, N: int):
-        """Return a copy of CalibrationDist which will yield `N` models.
+        """Return a copy of EpistemicDist which will yield `N` models.
         
         :param:N: Number of models to return.
         """
@@ -125,7 +144,7 @@ class CalibrationDist(abc.ABC):
 # | Parameter | Description |
 # |-----------|-------------|
 # | `c_list` | The values of $c$ we want to test. |
-# | `models` | Sequence of $N$ quintuplets of models (data generation, candidate A, candidate B, loss A, loss B) drawn from a calibration distribution. Typically, but not necessarily, a subclass of `CalibrationDist`: any dataclass satisfying the requirements listed in `CalibrationDist` is accepted. |
+# | `models` | Sequence of $N$ quintuplets of models (data generation, candidate A, candidate B, loss A, loss B) drawn from a calibration distribution. Typically, but not necessarily, a subclass of `EpistemicDist`: any dataclass satisfying the requirements listed in `EpistemicDist` is accepted. |
 # | `Ldata` | Data set size used to construct the empirical PPF for models $A$ and $B$. Ideally commensurate with the actual data set used to assess models. |
 # | `Linf` | Data set size considered equivalent to "infinite". Used to compute $\B^{\mathrm{conf}}$ |
 #
@@ -174,7 +193,7 @@ class CalibrationDist(abc.ABC):
 # | Serializable | Saved to disk | `Calibrate` arguments<br>`CalibrateResult` |
 # | Hashable    | Used as dict key | items of `models`<br>items of `c_list` |
 #
-# To satisfy these requirements, the sequence `models` needs to be specified as a frozen dataclass:[^more-formats] Dataclasses for serializability, frozen for hashability. Of course they should also define `__iter__` and `__len__` – see [`CalibrationDist`](code_calibration-distribution) for an example.
+# To satisfy these requirements, the sequence `models` needs to be specified as a frozen dataclass:[^more-formats] Dataclasses for serializability, frozen for hashability. Of course they should also define `__iter__` and `__len__` – see [`EpistemicDist`](code_calibration-distribution) for an example.
 #
 # [CHECK: I think loss functions are unrestricted now ? Maybe impact on caching ?] The loss functions `QA` and `QB` functions can be specified as either dataclasses (with a suitable `__call__` method) or [`PureFunction`s](https://scityping.readthedocs.io/en/latest/api/functions.html#scityping.functions.PureFunction). In practice we found dataclasses easier to use.
 #
@@ -261,7 +280,8 @@ class CalibrateOutput(TaskOutput):
 # - $\Bconf{}$ only needs to be computed once per data model. $\Bconf{}$ is also typically cheap (unless the data generation model is very complicated), so it is not worth dispatching to an MP subprocess.  
 
 # %% editable=true slideshow={"slide_type": ""}
-def compute_Bemd(datamodel_risk_c: Tuple[int,DataModel,CandidateModel,CandidateModel,RiskFunction,RiskFunction,float],
+def compute_Bemd(i_ω_c: Tuple[int, Experiment, float],
+                 #datamodel_risk_c: Tuple[int,DataModel,CandidateModel,CandidateModel,RiskFunction,RiskFunction,float],
                  #riskA: RiskFunction, riskB: RiskFunction,
                  #synth_ppfA: SynthPPF, synth_ppfB: SynthPPF,
                  #candidate_model_A: CandidateModel, candidate_model_B: CandidateModel,
@@ -274,25 +294,23 @@ def compute_Bemd(datamodel_risk_c: Tuple[int,DataModel,CandidateModel,CandidateM
     - Generates synthetic observed data using `Mtrue`.
     - Calls `emd_falsify.Bemd`
 
-    `Mptrue`, `Metrue`, `Mptheo` and `Metheo` should be generic models:
-    they are functions accepting parameters, and returning frozen models
-    with fixed parameters.
     """
     ## Unpack arg 1 ##  (pool.imap requires iterating over one argument only)
-    i, data_model, candidate_model_A, candidate_model_B, QA, QB, c = datamodel_risk_c
+    # i, data_model, candidate_model_A, candidate_model_B, QA, QB, c = datamodel_risk_c
+    i, ω, c = i_ω_c
 
     ## Generate observed data ##
     logger.debug(f"Compute Bemd - Generating {Ldata} data points."); t1 = time.perf_counter()
-    data = data_model(Ldata)                                      ; t2 = time.perf_counter()
+    data = ω.data_model(Ldata)                                     ; t2 = time.perf_counter()
     logger.debug(f"Compute Bemd - Done generating {Ldata} data points. Took {t2-t1:.2f} s")
 
     ## Construct synthetic quantile functions ##
-    synth_ppfA = emd.make_empirical_risk_ppf(QA(candidate_model_A(data)))
-    synth_ppfB = emd.make_empirical_risk_ppf(QB(candidate_model_B(data)))
+    synth_ppfA = emd.make_empirical_risk_ppf(ω.QA(ω.candidateA(data)))
+    synth_ppfB = emd.make_empirical_risk_ppf(ω.QB(ω.candidateB(data)))
 
     ## Construct mixed quantile functions ##
-    mixed_ppfA = emd.make_empirical_risk_ppf(QA(data))
-    mixed_ppfB = emd.make_empirical_risk_ppf(QB(data))
+    mixed_ppfA = emd.make_empirical_risk_ppf(ω.QA(data))
+    mixed_ppfB = emd.make_empirical_risk_ppf(ω.QB(data))
 
     ## Draw sets of expected risk values (R) for each model ##
                      
@@ -322,7 +340,8 @@ def compute_Bemd(datamodel_risk_c: Tuple[int,DataModel,CandidateModel,CandidateM
     Bemd = np.less.outer(RA_lst, RB_lst).mean()
 
     ## Return alongside the experiment key
-    return (i, data_model, QA, QB, c), Bemd
+    return (i, ω, c), Bemd
+    # return (i, data_model, QA, QB, c), Bemd
 
 # %% editable=true slideshow={"slide_type": ""}
 def compute_Bconf(data_model, QA, QB, Linf):
@@ -343,7 +362,7 @@ def compute_Bconf(data_model, QA, QB, Linf):
     return RA < RB
 
 # %% editable=true slideshow={"slide_type": ""}
-def compute_Bemd_and_maybe_Bconf(datamodel_risk_c, Ldata, Linf, c_conf):
+def compute_Bemd_and_maybe_Bconf(i_ω_c, Ldata, Linf, c_conf):
     """Wrapper which calls both `compute_Bemd` and `compute_Bconf`.
     The latter is only called if `c` matches `c_conf`. 
     
@@ -372,9 +391,9 @@ def compute_Bemd_and_maybe_Bconf(datamodel_risk_c, Ldata, Linf, c_conf):
     # NB: Since `data_model` is consumed within this function, even if there
     #     were a bottleneck with imap, it should not exceed memory:
     #     i, c, Bemd and Bconf are all small scalars.
-    (i, data_model, QA, QB, c), Bemd = compute_Bemd(datamodel_risk_c, Ldata)
+    (i, ω, c), Bemd = compute_Bemd(i_ω_c, Ldata)
     if c == c_conf:
-        Bconf = compute_Bconf(data_model, QA, QB, Linf)
+        Bconf = compute_Bconf(ω.data_model, ω.QA, ω.QB, Linf)
     else:
         Bconf = None
     return i, c, Bemd, Bconf
@@ -391,7 +410,7 @@ class Calibrate:
         self,
         c_list     : List[float],
         #data_models: Sequence[DataModel],
-        models_Qs: Dataclass,
+        experiments: Dataclass,   # Iterable of Experiment elements
         #riskA     : RiskFunction
         # riskA      : Union[Dataclass,PureFunction],
         # riskB      : Union[Dataclass,PureFunction],
@@ -412,15 +431,12 @@ class Calibrate:
         ----------
         c_list:
         
-        models: Dataclass following the pattern of `CalibrationDist`.
-            Therefore also an iterable of data models to use for calibration.
-            See `CalibrationDist` for more details.
-            Each data model will result in one (Bconf, Bemd) pair in the output results.
+        experiments: Dataclass following the pattern of `EpistemicDist`.
+            Therefore also an iterable of data models to use for calibration;
+            when iterating, each element should be compatible with `Experiment` type.
+            See `EpistemicDist` for more details.
+            Each experiment will result in one (Bconf, Bemd) pair in the output results.
             If this iterable is sized, progress bars will estimate the remaining compute time.
-        
-        #riskA, riskB:
-        
-        #synth_riskA, synth_riskB:
         
         Ldata: Number of data points from the true model to generate when computing Bemd.
             This should be chosen commensurate with the size of the dataset that will be analyzed,
@@ -462,7 +478,7 @@ class Calibrate:
 
         # %% editable=true slideshow={"slide_type": ""} tags=["skip-execution"]
         try:
-            N = len(models_Qs)
+            N = len(experiments)
         except (TypeError, AttributeError):  # Typically TypeError, but AttributeError seems also plausible
             logger.info("Data model iterable has no length: it will not be possible to estimate the remaining computation time.")
             total = None
@@ -476,8 +492,8 @@ class Calibrate:
 # Run the experiments. Since there are a lot of them, and they each take a few minutes, we use multiprocessing to run them in parallel.
 
         # %% editable=true slideshow={"slide_type": ""} tags=["skip-execution"]
-        models_c_gen = ((i, *models_Qs, c)  # i is used as an id for each different model/Qs set
-                        for i, models_Qs in enumerate(models_Qs)
+        ω_c_gen = ((i, ω, c)  # i is used as an id for each different model/Qs set
+                        for i, ω in enumerate(experiments)
                         for c in c_list)
 
         if ncores > 1:
@@ -487,14 +503,14 @@ class Calibrate:
                 chunksize, extra = divmod(N, ncores*6)
                 if extra:
                     chunksize += 1
-                Bemd_Bconf_it = pool.imap_unordered(compute_partial, models_c_gen,
+                Bemd_Bconf_it = pool.imap_unordered(compute_partial, ω_c_gen,
                                                     chunksize=chunksize)
                 for (i, c, Bemd, Bconf) in Bemd_Bconf_it:
                     progbar.update(1)        # Updating first more reliable w/ ssh
                     Bemd_results[i, c] = Bemd
                     if Bconf is not None:
                         Bconf_results[i] = Bconf
-                # Bemd_it = pool.imap(compute_Bemd_partial, models_c_gen,
+                # Bemd_it = pool.imap(compute_Bemd_partial, ω_c_gen,
                 #                     chunksize=chunksize)
                 # for (i, data_model, QA, QB, c), Bemd_res in Bemd_it:
                 #     progbar.update(1)        # Updating first more reliable w/ ssh
@@ -507,13 +523,13 @@ class Calibrate:
 
         # %% editable=true slideshow={"slide_type": ""}
         else:
-            Bemd_Bconf_it = (compute_partial(arg) for arge in models_c_gen)
+            Bemd_Bconf_it = (compute_partial(arg) for arg in ω_c_gen)
             for (i, c, Bemd, Bconf) in Bemd_Bconf_it:
                 progbar.update(1)
                 Bemd_results[i, c] = Bemd
                 if Bconf is not None:
                     Bconf_results[i] = Bconf
-            # Bemd_it = (compute_Bemd_partial(arg) for arg in models_c_gen)
+            # Bemd_it = (compute_Bemd_partial(arg) for arg in ω_c_gen)
             # for (i, data_model, QA, QB, c), Bemd_res in Bemd_it:
             #     progbar.update(1)        # Updating first more reliable w/ ssh
             #     Bemd_results[i, c] = Bemd_res
@@ -534,15 +550,15 @@ class Calibrate:
 # :::{caution}
 # This assumes that we get the same models when we rebuild them within `unpack_result`.
 # Two ways this assumption can be violated:
-# - The user’s code for `models_Qs` has changed. (Unless the user used a type
+# - The user’s code for `experiments` has changed. (Unless the user used a type
 #   which serialises to completely self-contained data.)
 # - The model generation is non-reproducible. (E.g. it uses an unseeded RNG).
 # :::
 
         # %% editable=true slideshow={"slide_type": ""} tags=["skip-execution"]
         # NB: Don’t just use list(Bemd_results.values()): order of dictionary is not guaranteed
-        return dict(Bemd =[Bemd_results [i,c] for i in range(len(models_Qs)) for c in c_list],
-                    Bconf=[Bconf_results[i]   for i in range(len(models_Qs))])
+        return dict(Bemd =[Bemd_results [i,c] for i in range(len(experiments)) for c in c_list],
+                    Bconf=[Bconf_results[i]   for i in range(len(experiments))])
 
 # %% [markdown] editable=true slideshow={"slide_type": ""}
 # > **END OF `Calibrate.__call__`**

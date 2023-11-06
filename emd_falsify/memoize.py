@@ -1,6 +1,6 @@
 # # Caching decorator
 
-# This module defines the `@cache` decorator according to configuration. There are two options:
+# This module defines the `@memoize` decorator according to configuration. There are two options:
 # - On-disk caching uses *joblib.Memory*.
 # - In-memory caching (the default) uses *functools.lru_cache*.
 # On-disk caching is opt-in for two reasons:
@@ -162,8 +162,8 @@ def nofail_joblib_cache(warn: bool=True):
 
     Caution
     -------
-    Caching failures are detecting by catching `pickle.PicklingError`.
-    Consequenly, if the wrapped function itself raises `pickle.PicklingError`,
+    Caching failures are detected by catching `pickle.PicklingError`.
+    Consequently, if the wrapped function itself raises `pickle.PicklingError`,
     it will unnecessarily be run twice (the second time allowing the error
     to propagate up the call stack).
 
