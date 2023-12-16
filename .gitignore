@@ -1,11 +1,7 @@
-*.ipynb
-*.md
-*.myst
 build
 *.joblib-cache
 *.pytest_cache
 
-labnotes
 purgatory
-project.cfg
+emd_falsify/*.md
 test/*.txt
