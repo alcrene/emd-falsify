@@ -1,43 +1,71 @@
-# -*- coding: utf-8 -*-
-# ---
-# jupyter:
-#   jupytext:
-#     formats: py:percent
-#     text_representation:
-#       extension: .py
-#       format_name: percent
-#       format_version: '1.3'
-#       jupytext_version: 1.15.0
-#   kernelspec:
-#     display_name: Python (emd-paper)
-#     language: python
-#     name: emd-paper
-# ---
+---
+jupytext:
+  encoding: '# -*- coding: utf-8 -*-'
+  formats: py:percent,md:myst
+  notebook_metadata_filter: -jupytext.text_representation.jupytext_version
+  text_representation:
+    extension: .md
+    format_name: myst
+    format_version: 0.13
+kernelspec:
+  display_name: Python (emd-falsify-dev)
+  language: python
+  name: emd-falsify-dev
+---
 
-# %% [markdown] editable=true slideshow={"slide_type": ""}
-# ---
-# math:
-#   '\Bconf' : 'B^{\mathrm{conf}}_{#1}'
-#   '\Bemd'  : 'B_{#1}^{\mathrm{EMD}}'
-# ---
++++ {"tags": ["remove-cell"], "editable": true, "slideshow": {"slide_type": ""}}
 
-# %% editable=true slideshow={"slide_type": ""} tags=["hide-input"]
+---
+math:
+  '\Bconf' : 'B^{\mathrm{conf}}_{#1}'
+  '\Bemd'  : 'B_{#1}^{\mathrm{EMD}}'
+---
+
+```{code-cell}
+---
+editable: true
+slideshow:
+  slide_type: ''
+tags: [hide-input]
+---
 from __future__ import annotations
+```
 
-# %% [markdown] editable=true slideshow={"slide_type": ""}
-# # Tasks
-#
-# Running experiments via [SumatraTasks](https://sumatratask.readthedocs.io/en/latest/basics.html) has two purposes:
-# - Maintaining an electronic lab book: recording all input/code/output triplets, along with a bunch of metadata to ensure reproducibility (execution date, code versions, etc.)
-# - Avoid re-running calculations, with hashes that are both portable and long-term stable.
++++ {"editable": true, "slideshow": {"slide_type": ""}}
 
-# %% tags=["active-ipynb"] editable=true slideshow={"slide_type": ""}
-# from config import config   # Notebook
+# Tasks
 
-# %% tags=["active-py"] editable=true slideshow={"slide_type": ""} raw_mimetype=""
+Running experiments via [SumatraTasks](https://sumatratask.readthedocs.io/en/latest/basics.html) has two purposes:
+- Maintaining an electronic lab book: recording all input/code/output triplets, along with a bunch of metadata to ensure reproducibility (execution date, code versions, etc.)
+- Avoid re-running calculations, with hashes that are both portable and long-term stable.
+
+```{code-cell}
+---
+editable: true
+slideshow:
+  slide_type: ''
+tags: [active-ipynb]
+---
+from config import config   # Notebook
+```
+
+```{raw-cell}
+---
+editable: true
+raw_mimetype: ''
+slideshow:
+  slide_type: ''
+tags: [active-py]
+---
 from .config import config  # Python script
+```
 
-# %% editable=true slideshow={"slide_type": ""}
+```{code-cell}
+---
+editable: true
+slideshow:
+  slide_type: ''
+---
 import abc
 import psutil
 import logging
@@ -61,19 +89,38 @@ from smttask import RecordedTask, TaskOutput
 from smttask.workflows import ParamColl, SeedGenerator
 
 import emd_falsify as emd
+```
 
-# %% editable=true slideshow={"slide_type": ""}
+```{code-cell}
+---
+editable: true
+slideshow:
+  slide_type: ''
+---
 logger = logging.getLogger(__name__)
+```
 
-# %% editable=true slideshow={"slide_type": ""}
+```{code-cell}
+---
+editable: true
+slideshow:
+  slide_type: ''
+---
 __all__ = ["Calibrate", "EpistemicDist", "CalibrateOutput"]
+```
 
++++ {"editable": true, "slideshow": {"slide_type": ""}}
 
-# %% [markdown] editable=true slideshow={"slide_type": ""}
-# (code_calibration-distribution)=
-# ## Epistemic distribution
+(code_calibration-distribution)=
+## Epistemic distribution
 
-# %% editable=true slideshow={"slide_type": ""} tags=["skip-execution"]
+```{code-cell}
+---
+editable: true
+slideshow:
+  slide_type: ''
+tags: [skip-execution]
+---
 @dataclass
 class Experiment:
     """Reference implementation for an experiment container;
@@ -91,8 +138,14 @@ class Experiment:
     candidateB: CandidateModel
     QA: RiskFunction
     QB: RiskFunction
+```
 
-# %% editable=true slideshow={"slide_type": ""}
+```{code-cell}
+---
+editable: true
+slideshow:
+  slide_type: ''
+---
 @dataclass(frozen=True)
 class EpistemicDist(abc.ABC):
     """Generic template for a calibration distribution:
@@ -133,84 +186,101 @@ class EpistemicDist(abc.ABC):
         :param:N: Number of models to return.
         """
         return replace(self, N=N)
+```
 
++++ {"editable": true, "slideshow": {"slide_type": ""}}
 
-# %% [markdown] editable=true slideshow={"slide_type": ""}
-# ## Calibration task
+## Calibration task
 
-# %% [markdown] editable=true slideshow={"slide_type": ""}
-# ### Task parameters
-#
-# | Parameter | Description |
-# |-----------|-------------|
-# | `c_list` | The values of $c$ we want to test. |
-# | `models` | Sequence of $N$ quintuplets of models (data generation, candidate A, candidate B, loss A, loss B) drawn from a calibration distribution. Typically, but not necessarily, a subclass of `EpistemicDist`: any dataclass satisfying the requirements listed in `EpistemicDist` is accepted. |
-# | `Ldata` | Data set size used to construct the empirical PPF for models $A$ and $B$. Ideally commensurate with the actual data set used to assess models. |
-# | `Linf` | Data set size considered equivalent to "infinite". Used to compute $\B^{\mathrm{conf}}$ |
-#
-# The value of $N$ is determined from `len(models)`, so the `models` iterable should define its length.
-#
-# #### Config values:
-#
-# | Parameter | Description |
-# |-----------|-------------|
-# | `ncores`  |  Number of CPU cores to use. |
-#
-# ##### Effects on compute time
-#
-# The total number of experiments will be
-# $$N \times \lvert\mathtt{c\_list}\rvert \times \text{(\# parameter set distributions)} \,.$$
-# In the best scenario, one can expect compute times to be 2.5 minutes / experiment. So expect this to take a few hours.
-#
-# Results are cached on-disk with [joblib.Memory](https://joblib.readthedocs.io/en/latest/memory.html), so this notebook can be reexecuted without re-running the experiments. Loading from disk takes about 1 minute for 6000 experiments.
-#
-# ##### Effects on caching
-#
-# Like any [RecordedTask](https://sumatratask.readthedocs.io/en/latest/basics.html), `Calibrate` will record its output to disk. If executed again with exactly the same parameters, instead of evaluating the task again, the result is simply loaded from disk.
-#
-# In addition, `Calibrate` (or rather `Bemd`, which it calls internally) also uses a faster `joblib.Memory` cache to store intermediate results for each value of $c$ in `c_list`. Because `joblib.Memory` computes its hashes by first pickling its inputs, this cache is neither portable nor suitable for long-term storage: the output of `pickle.dump` may change depending on the machine, OS version, Python version, etc. Therefore this cache should be consider *local* and *short-term*. Nevertheless it is quite useful, because it means that `c_list` can be modified and only the new $c$ values will be computed.
-#
-# Changing any argument other than `c_list` will invalidate all caches and force all recomputations.
++++ {"editable": true, "slideshow": {"slide_type": ""}}
 
-# %% [markdown] editable=true slideshow={"slide_type": ""}
-# **Current limitations**
-# - `ncores` depends on `config.mp.max_cores`, but is determined automatically.
-#   No way to control via parameter.
+### Task parameters
 
-# %% [markdown] editable=true slideshow={"slide_type": ""}
-# ### Types
+| Parameter | Description |
+|-----------|-------------|
+| `c_list` | The values of $c$ we want to test. |
+| `models` | Sequence of $N$ quintuplets of models (data generation, candidate A, candidate B, loss A, loss B) drawn from a calibration distribution. Typically, but not necessarily, a subclass of `EpistemicDist`: any dataclass satisfying the requirements listed in `EpistemicDist` is accepted. |
+| `Ldata` | Data set size used to construct the empirical PPF for models $A$ and $B$. Ideally commensurate with the actual data set used to assess models. |
+| `Linf` | Data set size considered equivalent to "infinite". Used to compute $\B^{\mathrm{conf}}$ |
 
-# %% [markdown] editable=true slideshow={"slide_type": ""}
-# #### Input types
-#
-# To be able to retrieve pasts results, [Tasks](https://sumatratask.readthedocs.io/en/latest/basics.html) rely on their inputs being serializable (i.e. convertible to plain text). Both [*Pydantic*](https://docs.pydantic.dev/latest/) and [*SciTyping*](https://scityping.readthedocs.io) types are supported; *SciTyping* in particular can serialize arbitrary [dataclasses](https://docs.python.org/3/library/dataclasses.html), as long as each of their fields are serializable.
-#
-# A weaker requirement for an object is to be pickleable. All serializable objects should be pickleable, but many pickleable objects are not serializable. In general, objects need to be pickleable if they are sent to a multiprocessing (MP) subprocess, and serializable if they are written to the disk.
-#
-# | Requirement | Reason | Applies to |
-# |-------------|--------|----------|
-# | Pickleable  | Sent to subprocess | `compute_Bemd` arguments |
-# | Serializable | Saved to disk | `Calibrate` arguments<br>`CalibrateResult` |
-# | Hashable    | Used as dict key | items of `models`<br>items of `c_list` |
-#
-# To satisfy these requirements, the sequence `models` needs to be specified as a frozen dataclass:[^more-formats] Dataclasses for serializability, frozen for hashability. Of course they should also define `__iter__` and `__len__` – see [`EpistemicDist`](code_calibration-distribution) for an example.
-#
-# [CHECK: I think loss functions are unrestricted now ? Maybe impact on caching ?] The loss functions `QA` and `QB` functions can be specified as either dataclasses (with a suitable `__call__` method) or [`PureFunction`s](https://scityping.readthedocs.io/en/latest/api/functions.html#scityping.functions.PureFunction). In practice we found dataclasses easier to use.
-#
-# [^more-formats]: We use dataclasses because they are the easiest to support, but support for other formats could be added in the future.
+The value of $N$ is determined from `len(models)`, so the `models` iterable should define its length.
 
-# %% editable=true slideshow={"slide_type": ""}
+#### Config values:
+
+| Parameter | Description |
+|-----------|-------------|
+| `ncores`  |  Number of CPU cores to use. |
+
+##### Effects on compute time
+
+The total number of experiments will be
+$$N \times \lvert\mathtt{c\_list}\rvert \times \text{(\# parameter set distributions)} \,.$$
+In the best scenario, one can expect compute times to be 2.5 minutes / experiment. So expect this to take a few hours.
+
+Results are cached on-disk with [joblib.Memory](https://joblib.readthedocs.io/en/latest/memory.html), so this notebook can be reexecuted without re-running the experiments. Loading from disk takes about 1 minute for 6000 experiments.
+
+##### Effects on caching
+
+Like any [RecordedTask](https://sumatratask.readthedocs.io/en/latest/basics.html), `Calibrate` will record its output to disk. If executed again with exactly the same parameters, instead of evaluating the task again, the result is simply loaded from disk.
+
+In addition, `Calibrate` (or rather `Bemd`, which it calls internally) also uses a faster `joblib.Memory` cache to store intermediate results for each value of $c$ in `c_list`. Because `joblib.Memory` computes its hashes by first pickling its inputs, this cache is neither portable nor suitable for long-term storage: the output of `pickle.dump` may change depending on the machine, OS version, Python version, etc. Therefore this cache should be consider *local* and *short-term*. Nevertheless it is quite useful, because it means that `c_list` can be modified and only the new $c$ values will be computed.
+
+Changing any argument other than `c_list` will invalidate all caches and force all recomputations.
+
++++ {"editable": true, "slideshow": {"slide_type": ""}}
+
+**Current limitations**
+- `ncores` depends on `config.mp.max_cores`, but is determined automatically.
+  No way to control via parameter.
+
++++ {"editable": true, "slideshow": {"slide_type": ""}}
+
+### Types
+
++++ {"editable": true, "slideshow": {"slide_type": ""}}
+
+#### Input types
+
+To be able to retrieve pasts results, [Tasks](https://sumatratask.readthedocs.io/en/latest/basics.html) rely on their inputs being serializable (i.e. convertible to plain text). Both [*Pydantic*](https://docs.pydantic.dev/latest/) and [*SciTyping*](https://scityping.readthedocs.io) types are supported; *SciTyping* in particular can serialize arbitrary [dataclasses](https://docs.python.org/3/library/dataclasses.html), as long as each of their fields are serializable.
+
+A weaker requirement for an object is to be pickleable. All serializable objects should be pickleable, but many pickleable objects are not serializable. In general, objects need to be pickleable if they are sent to a multiprocessing (MP) subprocess, and serializable if they are written to the disk.
+
+| Requirement | Reason | Applies to |
+|-------------|--------|----------|
+| Pickleable  | Sent to subprocess | `compute_Bemd` arguments |
+| Serializable | Saved to disk | `Calibrate` arguments<br>`CalibrateResult` |
+| Hashable    | Used as dict key | items of `models`<br>items of `c_list` |
+
+To satisfy these requirements, the sequence `models` needs to be specified as a frozen dataclass:[^more-formats] Dataclasses for serializability, frozen for hashability. Of course they should also define `__iter__` and `__len__` – see [`EpistemicDist`](code_calibration-distribution) for an example.
+
+[CHECK: I think loss functions are unrestricted now ? Maybe impact on caching ?] The loss functions `QA` and `QB` functions can be specified as either dataclasses (with a suitable `__call__` method) or [`PureFunction`s](https://scityping.readthedocs.io/en/latest/api/functions.html#scityping.functions.PureFunction). In practice we found dataclasses easier to use.
+
+[^more-formats]: We use dataclasses because they are the easiest to support, but support for other formats could be added in the future.
+
+```{code-cell}
+---
+editable: true
+slideshow:
+  slide_type: ''
+---
 SynthPPF = Callable[[np.ndarray[float]], np.ndarray[float]]
+```
 
-# %% [markdown] editable=true slideshow={"slide_type": ""}
-# The items of the `models` sequence must be functions which take a single argument – the data size $L$ – and return a data set of size $L$:
-# $$\begin{aligned}
-# \texttt{data\_model}&:& L &\mapsto
-#       \bigl[(x_1, y_1), (x_2, y_2), \dotsc, (x_L, y_L)\bigr]
-# \end{aligned} \,. $$
-# Exactly how the dataset is structured (single array, list of tuples, etc.) is up to the user.
++++ {"editable": true, "slideshow": {"slide_type": ""}}
 
-# %% editable=true slideshow={"slide_type": ""}
+The items of the `models` sequence must be functions which take a single argument – the data size $L$ – and return a data set of size $L$:
+$$\begin{aligned}
+\texttt{data\_model}&:& L &\mapsto
+      \bigl[(x_1, y_1), (x_2, y_2), \dotsc, (x_L, y_L)\bigr]
+\end{aligned} \,. $$
+Exactly how the dataset is structured (single array, list of tuples, etc.) is up to the user.
+
+```{code-cell}
+---
+editable: true
+slideshow:
+  slide_type: ''
+---
 Dataset = TypeVar("Dataset",
                   bound=Union[np.ndarray,
                               List[np.ndarray],
@@ -218,68 +288,96 @@ Dataset = TypeVar("Dataset",
                  )
 DataModel = Callable[[int], Dataset]
 CandidateModel = Callable[[Dataset], Dataset]
+```
 
-# %% [markdown] editable=true slideshow={"slide_type": ""}
-# The `riskA` and `riskB` functions take a dataset returned by `data_model` and evaluate the risk $q$ of each sample. They return a vector of length $L$, and their signature depends on the output format of `data_model`:
-# $$\begin{aligned}
-# \texttt{risk function}&:& \{(x_i,y_i)\}_{i=1}^L &\mapsto \{q_i\}_{i=1}^L \,.
-# \end{aligned}$$
++++ {"editable": true, "slideshow": {"slide_type": ""}}
 
-# %% editable=true slideshow={"slide_type": ""}
+The `riskA` and `riskB` functions take a dataset returned by `data_model` and evaluate the risk $q$ of each sample. They return a vector of length $L$, and their signature depends on the output format of `data_model`:
+$$\begin{aligned}
+\texttt{risk function}&:& \{(x_i,y_i)\}_{i=1}^L &\mapsto \{q_i\}_{i=1}^L \,.
+\end{aligned}$$
+
+```{code-cell}
+---
+editable: true
+slideshow:
+  slide_type: ''
+---
 RiskFunction = Callable[[Dataset], np.ndarray]
+```
 
-# %% [markdown] editable=true slideshow={"slide_type": ""}
-# #### Result type
++++ {"editable": true, "slideshow": {"slide_type": ""}}
 
-# %% [markdown] editable=true slideshow={"slide_type": ""}
-# Calibration results are returned as a [record array](https://numpy.org/doc/stable/user/basics.rec.html#record-arrays) with fields `Bemd` and `Bconf`. Each row in the array corresponds to one data model, and there is one array per $c$ value. So a `CalibrateResult` object is a dictionary which looks something like the following:
+#### Result type
 
-# %% [markdown] editable=true slideshow={"slide_type": ""}
-# $$
-# \begin{alignedat}{4}  % Would be nicer with nested {array}, but KaTeX doesn’t support vertical alignment
-# &\texttt{CalibrateResult}:\qquad & \{ c_1: &\qquad&  \texttt{Bemd} &\quad& \texttt{Bconf} \\
-#   &&&&  0.24    && 0 \\
-#   &&&&  0.35    && 1 \\
-#   &&&&  0.37    && 0 \\
-#   &&&&  0.51    && 1 \\
-#   && c_2: &\qquad&  \texttt{Bemd} &\quad& \texttt{Bconf} \\
-#   &&&&  0.11    && 0 \\
-#   &&&&  0.14    && 0 \\
-#   &&&&  0.22    && 0 \\
-#   &&&&  0.30    && 1 \\
-#   &&\vdots \\
-#   &&\}
-# \end{alignedat}$$
++++ {"editable": true, "slideshow": {"slide_type": ""}}
 
-# %% editable=true slideshow={"slide_type": ""}
+Calibration results are returned as a [record array](https://numpy.org/doc/stable/user/basics.rec.html#record-arrays) with fields `Bemd` and `Bconf`. Each row in the array corresponds to one data model, and there is one array per $c$ value. So a `CalibrateResult` object is a dictionary which looks something like the following:
+
++++ {"editable": true, "slideshow": {"slide_type": ""}}
+
+$$
+\begin{alignedat}{4}  % Would be nicer with nested {array}, but KaTeX doesn’t support vertical alignment
+&\texttt{CalibrateResult}:\qquad & \{ c_1: &\qquad&  \texttt{Bemd} &\quad& \texttt{Bconf} \\
+  &&&&  0.24    && 0 \\
+  &&&&  0.35    && 1 \\
+  &&&&  0.37    && 0 \\
+  &&&&  0.51    && 1 \\
+  && c_2: &\qquad&  \texttt{Bemd} &\quad& \texttt{Bconf} \\
+  &&&&  0.11    && 0 \\
+  &&&&  0.14    && 0 \\
+  &&&&  0.22    && 0 \\
+  &&&&  0.30    && 1 \\
+  &&\vdots \\
+  &&\}
+\end{alignedat}$$
+
+```{code-cell}
+---
+editable: true
+slideshow:
+  slide_type: ''
+---
 calib_point_dtype = np.dtype([("Bemd", float), ("Bconf", bool)])
 CalibrateResult = dict[float, np.ndarray[calib_point_dtype]]
+```
 
-
-# %% editable=true slideshow={"slide_type": ""}
+```{code-cell}
+---
+editable: true
+slideshow:
+  slide_type: ''
+---
 class CalibrateOutput(TaskOutput):
     """Compact format used to store task results to disk.
     Use `task.unpack_result` to convert to a `CalibrateResult` object.
     """
     Bemd : List[float]
     Bconf: List[float]
+```
 
++++ {"editable": true, "slideshow": {"slide_type": ""}}
 
-# %% [markdown] editable=true slideshow={"slide_type": ""}
-# ### Functions for the calibration experiment
+### Functions for the calibration experiment
 
-# %% [markdown] editable=true slideshow={"slide_type": ""}
-# Below we define the two functions to compute $\Bemd{}$ and $\Bconf{}$; these will be the abscissa and ordinate in the calibration plot.
-# Both functions take an arguments a data generation model, risk functions for candidate models $A$ and $B$, and a number of data points to generate.
-#
-# - $\Bemd{}$ needs to be recomputed for each value of $c$, so we also pass $c$ as a parameter. $\Bemd{}$ computations are relatively expensive, and there are a lot of them to do during calibration, so we want to dispatch `compute_Bemd` to different multiprocessing (MP) processes. This has two consequences:
-#
-#   - The `multiprocessing.Pool.imap` function we use to dispatch function calls can only iterate over one argument. To accomodate this, we combine the data model and $c$ value into a tuple `datamodel_c`, which is unpacked within the `compute_Bemd` function.
-#   - All arguments should be pickleable, as pickle is used to send data to subprocesses.
-#
-# - $\Bconf{}$ only needs to be computed once per data model. $\Bconf{}$ is also typically cheap (unless the data generation model is very complicated), so it is not worth dispatching to an MP subprocess.  
++++ {"editable": true, "slideshow": {"slide_type": ""}}
 
-# %% editable=true slideshow={"slide_type": ""}
+Below we define the two functions to compute $\Bemd{}$ and $\Bconf{}$; these will be the abscissa and ordinate in the calibration plot.
+Both functions take an arguments a data generation model, risk functions for candidate models $A$ and $B$, and a number of data points to generate.
+
+- $\Bemd{}$ needs to be recomputed for each value of $c$, so we also pass $c$ as a parameter. $\Bemd{}$ computations are relatively expensive, and there are a lot of them to do during calibration, so we want to dispatch `compute_Bemd` to different multiprocessing (MP) processes. This has two consequences:
+
+  - The `multiprocessing.Pool.imap` function we use to dispatch function calls can only iterate over one argument. To accomodate this, we combine the data model and $c$ value into a tuple `datamodel_c`, which is unpacked within the `compute_Bemd` function.
+  - All arguments should be pickleable, as pickle is used to send data to subprocesses.
+
+- $\Bconf{}$ only needs to be computed once per data model. $\Bconf{}$ is also typically cheap (unless the data generation model is very complicated), so it is not worth dispatching to an MP subprocess.
+
+```{code-cell}
+---
+editable: true
+slideshow:
+  slide_type: ''
+---
 def compute_Bemd(i_ω_c: Tuple[int, Experiment, float],
                  #datamodel_risk_c: Tuple[int,DataModel,CandidateModel,CandidateModel,RiskFunction,RiskFunction,float],
                  #riskA: RiskFunction, riskB: RiskFunction,
@@ -342,8 +440,14 @@ def compute_Bemd(i_ω_c: Tuple[int, Experiment, float],
     ## Return alongside the experiment key
     return (i, ω, c), Bemd
     # return (i, data_model, QA, QB, c), Bemd
+```
 
-# %% editable=true slideshow={"slide_type": ""}
+```{code-cell}
+---
+editable: true
+slideshow:
+  slide_type: ''
+---
 def compute_Bconf(data_model, QA, QB, Linf):
     """Compute the true Bconf (using a quasi infinite number of samples)"""
     
@@ -360,8 +464,14 @@ def compute_Bconf(data_model, QA, QB, Linf):
     t2 = time.perf_counter()
     logger.debug(f"Compute Bconf – Done evaluating risk. Took {t2-t1:.2f} s")
     return RA < RB
+```
 
-# %% editable=true slideshow={"slide_type": ""}
+```{code-cell}
+---
+editable: true
+slideshow:
+  slide_type: ''
+---
 def compute_Bemd_and_maybe_Bconf(i_ω_c, Ldata, Linf, c_conf):
     """Wrapper which calls both `compute_Bemd` and `compute_Bconf`.
     The latter is only called if `c` matches `c_conf`. 
@@ -397,12 +507,19 @@ def compute_Bemd_and_maybe_Bconf(i_ω_c, Ldata, Linf, c_conf):
     else:
         Bconf = None
     return i, c, Bemd, Bconf
+```
 
++++ {"editable": true, "slideshow": {"slide_type": ""}}
 
-# %% [markdown] editable=true slideshow={"slide_type": ""}
-# ### Task definition
+### Task definition
 
-# %% editable=true slideshow={"slide_type": ""} tags=["skip-execution"]
+```{code-cell}
+---
+editable: true
+slideshow:
+  slide_type: ''
+tags: [skip-execution]
+---
 @RecordedTask
 class Calibrate:
 
@@ -454,29 +571,48 @@ class Calibrate:
            how difficult they are to differentiate; it needs to be determined empirically.
         """
         pass
+```
 
++++ {"editable": true, "slideshow": {"slide_type": ""}}
 
-# %% [markdown] editable=true slideshow={"slide_type": ""}
-# Bind arguments to the `Bemd` function, so it only take one argument (`datamodel_c`) as required by `imap`.
+Bind arguments to the `Bemd` function, so it only take one argument (`datamodel_c`) as required by `imap`.
 
-        # %% editable=true slideshow={"slide_type": ""} tags=["skip-execution"]
+```{code-cell}
+---
+editable: true
+slideshow:
+  slide_type: ''
+tags: [skip-execution]
+---
         # compute_Bemd_partial = partial(compute_Bemd, Ldata=Ldata)
         compute_partial = partial(compute_Bemd_and_maybe_Bconf,
                                   Ldata=Ldata, Linf=Linf, c_conf=c_list[0])
+```
 
-# %% [markdown]
-# Define dictionaries into which we will accumulate the results of the $B^{\mathrm{EMD}}$ and $B_{\mathrm{conf}}$ calculations.
+Define dictionaries into which we will accumulate the results of the $B^{\mathrm{EMD}}$ and $B_{\mathrm{conf}}$ calculations.
 
-        # %% editable=true slideshow={"slide_type": ""} tags=["skip-execution"]
+```{code-cell}
+---
+editable: true
+slideshow:
+  slide_type: ''
+tags: [skip-execution]
+---
         Bemd_results = {}
         Bconf_results = {}
+```
 
-# %% [markdown]
-# - Set the iterator over parameter combinations (we need two identical ones)
-# - Set up progress bar.
-# - Determine the number of multiprocessing cores we will use.
+- Set the iterator over parameter combinations (we need two identical ones)
+- Set up progress bar.
+- Determine the number of multiprocessing cores we will use.
 
-        # %% editable=true slideshow={"slide_type": ""} tags=["skip-execution"]
+```{code-cell}
+---
+editable: true
+slideshow:
+  slide_type: ''
+tags: [skip-execution]
+---
         try:
             N = len(experiments)
         except (TypeError, AttributeError):  # Typically TypeError, but AttributeError seems also plausible
@@ -487,11 +623,17 @@ class Calibrate:
         progbar = tqdm(desc="Calib. experiments", total=total)
         ncores = psutil.cpu_count(logical=False)
         ncores = min(ncores, total, config.mp.max_cores)
+```
 
-# %% [markdown]
-# Run the experiments. Since there are a lot of them, and they each take a few minutes, we use multiprocessing to run them in parallel.
+Run the experiments. Since there are a lot of them, and they each take a few minutes, we use multiprocessing to run them in parallel.
 
-        # %% editable=true slideshow={"slide_type": ""} tags=["skip-execution"]
+```{code-cell}
+---
+editable: true
+slideshow:
+  slide_type: ''
+tags: [skip-execution]
+---
         ω_c_gen = ((i, ω, c)  # i is used as an id for each different model/Qs set
                         for i, ω in enumerate(experiments)
                         for c in c_list)
@@ -517,11 +659,18 @@ class Calibrate:
                 #     Bemd_results[i, c] = Bemd_res
                 #     if i not in Bconf_results:
                 #         Bconf_results[i] = compute_Bconf(data_model, QA, QB, Linf)
+```
 
-# %% [markdown] editable=true slideshow={"slide_type": ""}
-# Variant without multiprocessing:
++++ {"editable": true, "slideshow": {"slide_type": ""}}
 
-        # %% editable=true slideshow={"slide_type": ""}
+Variant without multiprocessing:
+
+```{code-cell}
+---
+editable: true
+slideshow:
+  slide_type: ''
+---
         else:
             Bemd_Bconf_it = (compute_partial(arg) for arg in ω_c_gen)
             for (i, c, Bemd, Bconf) in Bemd_Bconf_it:
@@ -535,35 +684,59 @@ class Calibrate:
             #     Bemd_results[i, c] = Bemd_res
             #     if i not in Bconf_results:
             #         Bconf_results[i] = compute_Bconf(data_model, QA, QB, Linf)
+```
 
-# %% [markdown] editable=true slideshow={"slide_type": ""}
-# Close progress bar:
++++ {"editable": true, "slideshow": {"slide_type": ""}}
 
-        # %% editable=true slideshow={"slide_type": ""} tags=["skip-execution"]
+Close progress bar:
+
+```{code-cell}
+---
+editable: true
+slideshow:
+  slide_type: ''
+tags: [skip-execution]
+---
         progbar.close()
+```
 
-# %% [markdown] editable=true slideshow={"slide_type": ""}
-# #### Result format
-#
-# If we serialize the whole dict, most of the space is taken up by serializing the models in the keys. Not only is this wasteful – we can easily recreate them with `model_c_gen` – but it also makes deserializing the results quite slow.
-# So instead we return just the values as a list, and provide an `unpack_result` method which reconstructs the result dictionary.
-# :::{caution}
-# This assumes that we get the same models when we rebuild them within `unpack_result`.
-# Two ways this assumption can be violated:
-# - The user’s code for `experiments` has changed. (Unless the user used a type
-#   which serialises to completely self-contained data.)
-# - The model generation is non-reproducible. (E.g. it uses an unseeded RNG).
-# :::
++++ {"editable": true, "slideshow": {"slide_type": ""}}
 
-        # %% editable=true slideshow={"slide_type": ""} tags=["skip-execution"]
+#### Result format
+
+If we serialize the whole dict, most of the space is taken up by serializing the models in the keys. Not only is this wasteful – we can easily recreate them with `model_c_gen` – but it also makes deserializing the results quite slow.
+So instead we return just the values as a list, and provide an `unpack_result` method which reconstructs the result dictionary.
+:::{caution}
+This assumes that we get the same models when we rebuild them within `unpack_result`.
+Two ways this assumption can be violated:
+- The user’s code for `experiments` has changed. (Unless the user used a type
+  which serialises to completely self-contained data.)
+- The model generation is non-reproducible. (E.g. it uses an unseeded RNG).
+:::
+
+```{code-cell}
+---
+editable: true
+slideshow:
+  slide_type: ''
+tags: [skip-execution]
+---
         # NB: Don’t just use list(Bemd_results.values()): order of dictionary is not guaranteed
         return dict(Bemd =[Bemd_results [i,c] for i in range(len(experiments)) for c in c_list],
                     Bconf=[Bconf_results[i]   for i in range(len(experiments))])
+```
 
-# %% [markdown] editable=true slideshow={"slide_type": ""}
-# > **END OF `Calibrate.__call__`**
++++ {"editable": true, "slideshow": {"slide_type": ""}}
 
-    # %% editable=true slideshow={"slide_type": ""} tags=["skip-execution"]
+> **END OF `Calibrate.__call__`**
+
+```{code-cell}
+---
+editable: true
+slideshow:
+  slide_type: ''
+tags: [skip-execution]
+---
     def unpack_results(self, result: Calibrate.Outputs.result_type
                       ) -> CalibrateResult:
         assert len(result.Bemd) == len(self.c_list) * len(result.Bconf), \
@@ -588,13 +761,21 @@ class Calibrate:
         #return UnpackedCalibrateResult(Bemd=Bemd_dict, Bconf=Bconf_dict)
         return {c: np.array(calib_curve_data[c], dtype=calib_point_dtype)
                 for c in self.taskinputs.c_list}
+```
 
-# %% [markdown] editable=true slideshow={"slide_type": ""}
-# #### (Model, $c$) generator
-#
-# `task.model_c_gen` yields combined `(data_model, c)` tuples by iterating over both `models` and `c_list`. The reason we implement this in its own method is so we can recreate the sequence of models and $c$ values in `unpack_results`: this way we only need to store the sequence of $\Bemd{}$ and $\Bconf{}$ values for each (model, $c$) pair, but not the models themselves.
++++ {"editable": true, "slideshow": {"slide_type": ""}}
 
-    # %% editable=true slideshow={"slide_type": ""} tags=["skip-execution"]
+#### (Model, $c$) generator
+
+`task.model_c_gen` yields combined `(data_model, c)` tuples by iterating over both `models` and `c_list`. The reason we implement this in its own method is so we can recreate the sequence of models and $c$ values in `unpack_results`: this way we only need to store the sequence of $\Bemd{}$ and $\Bconf{}$ values for each (model, $c$) pair, but not the models themselves.
+
+```{code-cell}
+---
+editable: true
+slideshow:
+  slide_type: ''
+tags: [skip-execution]
+---
     # def model_c_gen(self, Bemd_results: "dict|set", Bconf_results: "dict|set"):
     #     """Return an iterator over data models and c values.
     #     The two additional arguments `Bemd_results` and `Bconf_results` should be sets of
@@ -608,4 +789,4 @@ class Calibrate:
     #                 yield (data_model, modelA, modelB, c)
     #             else:                                    # Skip results which are already loaded
     #                 assert data_model in Bconf_results
-
+```

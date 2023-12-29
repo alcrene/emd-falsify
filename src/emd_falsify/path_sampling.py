@@ -33,17 +33,17 @@
 # (supp_path-sampling)=
 # # Sampling quantile paths
 
-# %% [markdown]
+# %% [markdown] editable=true slideshow={"slide_type": ""}
 # ```{only} html
 # {{ prolog }}
 # %{{ startpreamble }}
 # %{{ endpreamble }}
 #
 # $\renewcommand{\lnLh}[1][]{\hat{l}_{#1}}
-# \renewcommand{\emdstd}[1][]{\tilde{σ}_{{#1}}}
+# \renewcommand{\emdstd}[1][]{\tilde{σ}_{{#1}}}$
 # ```
 
-# %% tags=["active-ipynb", "remove-cell"]
+# %% editable=true slideshow={"slide_type": ""} tags=["active-ipynb", "remove-cell"]
 # # import jax
 # # import jax.numpy as jnp
 # # from functools import partial
@@ -72,7 +72,7 @@ from emd_falsify.digitize import digitize  # Used to improve numerical stability
 # %% [markdown] tags=["remove-cell"]
 # Notebook-only imports
 
-# %% tags=["active-ipynb", "hide-input"] editable=true slideshow={"slide_type": ""}
+# %% editable=true slideshow={"slide_type": ""} tags=["active-ipynb", "hide-input"]
 # import itertools
 # import scipy.stats
 # import holoviews as hv
@@ -103,23 +103,42 @@ logger = logging.getLogger(__name__)
 # %% [markdown]
 # Because the joint requirements of monotonicity, non-stationarity and $Φ$-symmetry are uncommon for a stochastic process, some care is required to define an appropriate $\pathP$. The approach we choose here is to first select the end points $\lnLh(0)$ and $\lnLh(1)$, then fill the interval by successive binary partitions: first $\bigl\{\lnLh\bigl(\tfrac{1}{2}\bigl)\bigr\}$, then $\bigl\{\lnLh\bigl(\tfrac{1}{4}\bigr), \lnLh\bigl(\tfrac{3}{4}\bigr)\bigr\}$, $\bigl\{\lnLh\bigl(\tfrac{1}{8}\bigr), \lnLh\bigl(\tfrac{3}{8}\bigr), \lnLh\bigl(\tfrac{5}{8}\bigr), \lnLh\bigl(\tfrac{7}{8}\bigr)\bigr\}$, etc. (Below we will denote these ensembles $\{\lnLh\}^{(1)}$, $\{\lnLh\}^{(2)}$, $\{\lnLh\}^{(3)}$, etc.) Thus integrating over paths becomes akin to a path integral with variable end points.
 # Moreover, instead of drawing quantile values, we draw increments
-# $$Δ l_{ΔΦ}(Φ) := \lnLh(Φ+ΔΦ) - \lnLh(Φ) \,.$$ (eq_def-quantile-increment)
+# ```{math}
+# :label: eq_def-quantile-increment
+# Δ l_{ΔΦ}(Φ) := \lnLh(Φ+ΔΦ) - \lnLh(Φ) \,.
+# ```
 # Given two initial end points $\lnLh(0)$ and $\lnLh(1)$, we therefore first we draw the pair $\bigl\{Δ l_{2^{-1}}(0),\; Δ l_{2^{-1}}\bigl(2^{-1}\bigr)\}$, which gives us
-# $$\lnLh\bigl(2^{-1}\bigr) = \lnLh(0) + Δ l_{2^{-1}}(0) = \lnLh(1) - Δ l_{2^{-1}}\bigl(2^{-1}\bigr)\,.$$
+# ```{math}
+# \lnLh\bigl(2^{-1}\bigr) = \lnLh(0) + Δ l_{2^{-1}}(0) = \lnLh(1) - Δ l_{2^{-1}}\bigl(2^{-1}\bigr)\,.
+# ```
 # Then $\bigl\{\lnLh(0), \lnLh\bigl(\frac{1}{2}\bigr) \bigr\}$ and $\bigl\{ \lnLh\bigl(\frac{1}{2}\bigr), \lnLh(1) \bigr\}$ serve as end points to draw $\bigl\{Δ l_{2^{-2}}\bigl(0\bigr),\; Δ l_{2^{-2}}\bigl(2^{-2}\bigr) \bigr\}$ and $\bigl\{Δ l_{2^{-2}}\bigl(2^{-1}\bigr),\; Δ l_{2^{-2}}\bigl(2^{-1} + 2^{-2}\bigr) \bigr\}$. We repeat the procedure as needed, sampling smaller and smaller incremenents, until the path has the desired resolution. As the increments are constrained:
-# $$Δ l_{2^{-n}}(Φ) \in \bigl( 0, \lnLh(Φ+2^{-n+1}) - \lnLh(Φ)\,\bigr)\,, $$
+# ```{math}
+# Δ l_{2^{-n}}(Φ) \in \bigl( 0, \lnLh(Φ+2^{-n+1}) - \lnLh(Φ)\,\bigr)\,,
+# ```
 # the path thus sampled is always monotone. Note also that increments must be drawn in pairs (or more generally as a *combination*) of values constrained by their sum:
-# $$Δ l_{2^{-n}}\bigl(Φ\bigr) + Δ l_{2^{-n}}\bigl(Φ + 2^{-n} \bigr) \stackrel{!}{=} \lnLh(Φ+2^{-n+1}) - \lnLh(Φ) \,.$$ (eq_sum-constraint)
+# ```{math}
+# :label: eq_sum-constraint
+# Δ l_{2^{-n}}\bigl(Φ\bigr) + Δ l_{2^{-n}}\bigl(Φ + 2^{-n} \bigr) \stackrel{!}{=} \lnLh(Φ+2^{-n+1}) - \lnLh(Φ) \,.
+# ```
 # The possible increments therefore lie on a 1-simplex, for which a natural choice is to use a beta distribution[^1], with the random variable corresponding to the first increment $Δ l_{2^{-n}}(Φ)$. The density function of a beta random variable has the form
-# $$p(x_1) \propto x^{α-1} (1-x)^{β-1}\,,$$ (eq_beta-pdf)
+# ```{math}
+# :label: eq_beta-pdf
+# p(x_1) \propto x^{α-1} (1-x)^{β-1}\,,
+# ```
 # with $α$ and $β$ parameters to be determined.
 
 # %% [markdown]
 # :::{important}  
 # An essential property of a stochastic process is *consistency*: it must not matter exactly how we discretize the interval {cite:p}`gillespieMathematicsBrownianMotion1996`. Let $\{\lnLh\}^{(n)}$ denote the steps which are added when we refine the discretization from steps of $2^{-n+1}$ to steps of $2^{-n}$:
-# $$\{\lnLh\}^{(n)} := \bigl\{\lnLh(k\cdot 2^{-n}) \,\big|\, k=1,3,\dotsc,2^n \bigr\} \,.$$ (eq_added-steps)
+# ```{math}
+# :label: eq_added-steps
+# \{\lnLh\}^{(n)} := \bigl\{\lnLh(k\cdot 2^{-n}) \,\big|\, k=1,3,\dotsc,2^n \bigr\} \,.
+# ```
 # A necessary condition for consistency is that coarsening the discretization from steps of $2^{-n}$ to steps of $2^{-n+1}$ (i.e. marginalizing over the points at $\{\lnLh\}^{(n)}$) does not substantially change the probability law:
-# $$p\bigl(\{\lnLh\}^{(n)}\bigr)\bigr) \stackrel{!}{=} \int p\bigl(\{\lnLh\}^{(n)} \,\big|\, \{\lnLh\}^{(n+1)}\bigr) \,d\{\lnLh\}^{(n+1)} \;+\; ε\,,$$ (eq_consistency-condition)
+# ```{math}
+# :label: eq_consistency-condition
+# p\bigl(\{\lnLh\}^{(n)}\bigr)\bigr) \stackrel{!}{=} \int p\bigl(\{\lnLh\}^{(n)} \,\big|\, \{\lnLh\}^{(n+1)}\bigr) \,d\{\lnLh\}^{(n+1)} \;+\; ε\,,
+# ```
 # with $ε$ vanishing as $n$ is increased to infinity.
 #
 # We have found that failure to satisfy this requirement leads to unsatisfactory sampling of quantile paths. In particular, naive procedures tend to perform worse as $ΔΦ$ is reduced, making accurate integration impossible.
@@ -133,26 +152,35 @@ logger = logging.getLogger(__name__)
 # ### Conditions for choosing the beta parameters
 #
 # :::{margin}
-# Recall that in {numref}`sec_integrating-Me`, we made the assumption that the variability of the path process $\pathP$ should determined by $δ^{\EMD}$, up to some constant $c$. This constant is determined by a calibration experiment.
+# Recall that we made the assumption that the variability of the path process $\pathP$ should determined by $δ^{\EMD}$, up to some constant $c$.{cite:p}`reneFalsifyingModels2024` This constant is determined by a calibration experiment.
 # To keep expressions concise, in this section we use $\emdstd(Φ) := c δ^{\EMD}(Φ)$.
 # :::
 # To draw an increment $Δ l_{2^{-n}}$, we need to convert $\lnLtt(Φ)$ and $\emdstd(Φ) := c δ^{\EMD}(Φ)$ into beta distribution parameters $α$ and $β$. If $x_1$ follows a beta distribution, then its first two cumulants are given by
-# $$\begin{aligned}
+# ```{math}
+# \begin{aligned}
 # x_1 &\sim \Beta(α, β) \,, \\
 # \EE[x_1] &= \frac{α}{α+β} \,, \\
 # \VV[x_1] &= \frac{αβ}{(α+β)^2(α+β+1)} \,. \\
-# \end{aligned}$$
+# \end{aligned}
+# ```
 # However, as discussed by Mateu-Figueras et al. (2021, 2011), to properly account for the geometry of a simplex, one should use instead statistics with respect to the Aitchison measure, sometimes referred to as the *center* and *metric variance*. Defining $x_2 = 1-x_1$, these can be written (Mateu-Figueras et al., 2021)
-# $$\begin{align}
-# \EE_a[(x_1, x_2)] &= \frac{1}{e^{ψ(α)} + e^{ψ(β)}} \bigl[e^{ψ(α)}, e^{ψ(β)}\bigr] \,, \label{eq_Aitchison-moments__EE} \\
-# \Mvar[(x_1, x_2)] &= \frac{1}{2} \bigl(ψ_1(α) + ψ_1(β)\bigr) \,. \label{eq_Aitchison-moments__Mvar}
-# \end{align}$$ (eq_Aitchison-moments)
+# ```{math}
+# :label: eq_Aitchison-moments
+#
+# \begin{align}
+# \EE_a[(x_1, x_2)] &= \frac{1}{e^{ψ(α)} + e^{ψ(β)}} \bigl[e^{ψ(α)}, e^{ψ(β)}\bigr] \,, \\
+# \Mvar[(x_1, x_2)] &= \frac{1}{2} \bigl(ψ_1(α) + ψ_1(β)\bigr) \,. \\
+# \end{align}
+# ```
 # Here $ψ$ and $ψ_1$ are the digamma and trigamma functions respectively.
 # (In addition to being more appropriate, the center and metric variance are also better suited for defining a consistent stochastic process. For example, since the metric variance is unbounded, we can always scale it with $\emdstd(Φ)$ without exceeding its domain.)
 
 # %% [markdown]
 # Since we want the sum to be $d := \lnLh(Φ+2^{-n+1}) - \lnLh(Φ)$, we define
-# $$\bigl[Δ l_{2^{-n}}\bigl(Φ\bigr),\, Δ l_{2^{-n}}\bigl(Φ+2^{-n})\bigr)\bigr] = d \bigl[x_1, x_2\bigr] \,.$$  (eq_relation-beta-increment)
+# ```{math}
+# :label: eq_relation-beta-increment
+# \bigl[Δ l_{2^{-n}}\bigl(Φ\bigr),\, Δ l_{2^{-n}}\bigl(Φ+2^{-n})\bigr)\bigr] = d \bigl[x_1, x_2\bigr] \,.
+# ```
 # Then
 
 # %% [markdown]
@@ -185,11 +213,17 @@ logger = logging.getLogger(__name__)
 # %% [markdown]
 # **Remarks**
 # - We satisfy the necessary condition for consistency by construction:
-#   $$p\bigl(\{l\}^{(n)}\bigr)\bigr) = \int p\bigl(\{l\}^{(n)} \,\big|\, \{l\}^{(n+1)}\bigr) \,d\{l\}^{(n+1)}\,.$$
+#   ```{math}
+#   p\bigl(\{l\}^{(n)}\bigr)\bigr) = \int p\bigl(\{l\}^{(n)} \,\big|\, \{l\}^{(n+1)}\bigr) \,d\{l\}^{(n+1)}\,.
+#   ```
 # - The stochastic process is not Markovian, so successive increments are not independent. The variance of a larger increment therefore need not equal the sum of the variance of constituent smaller ones; in other words,
-#   $$Δ l_{2^{-n+1}}\bigl(Φ\bigr) = Δ l_{2^{-n}}\bigl(Φ\bigr) + Δ l_{2^{-n}}\bigl(Φ+2^{-n}\bigr)$$
+#   ```{math}
+#   Δ l_{2^{-n+1}}\bigl(Φ\bigr) = Δ l_{2^{-n}}\bigl(Φ\bigr) + Δ l_{2^{-n}}\bigl(Φ+2^{-n}\bigr)
+#   ```
 #   does *not* imply
-#   $$\VV\bigl[Δ l_{2^{-n+1}}\bigl(Φ\bigr)\bigr] = \VV\bigl[Δ l_{2^{-n}}\bigl(Φ\bigr)\bigr] + \VV\bigl[Δ l_{2^{-n}}\bigl(Φ+2^{-n}\bigr)\bigr]\,.$$
+#   ```{math}
+#   \VV\bigl[Δ l_{2^{-n+1}}\bigl(Φ\bigr)\bigr] = \VV\bigl[Δ l_{2^{-n}}\bigl(Φ\bigr)\bigr] + \VV\bigl[Δ l_{2^{-n}}\bigl(Φ+2^{-n}\bigr)\bigr]\,.
+#   ```
 # - Our defining equations make equivalent use of the pre ($Δ l_{2^{-n}}(Φ)$) and post ($Δ l_{2^{-n}}(Φ+2^{-n})$) increments, thus preserving symmetry in $Φ$.
 # - Step sizes of the form $2^{-n}$ have exact representations in binary. Thus even small step sizes should not introduce additional numerical errors.
 
@@ -205,15 +239,19 @@ logger = logging.getLogger(__name__)
 # $$\begin{align}
 # r &:= \frac{\lnLtt(Φ+2^{-n}) - \lnLtt(Φ)}{\lnLtt(Φ+2^{-n+1}) - \lnLtt(Φ+2^{-n})} \,; \\
 # v &:= 2 \emdstd\bigl(Φ + 2^{-n}\bigr)^2 \,.
-# \end{align}$$ (eq_def-r-v_supp) 
+# \end{align}$$ (eq_def-r-v) 
 # :::
-# (Definitions repeated from Eqs. \labelcref{eq_def-r-v__r,eq_def-r-v__v}.) The first value, $r$, is the ratio of two subincrements within $Δ l_{2^{-n+1}}(Φ)$.
+# The first value, $r$, is the ratio of two subincrements within $Δ l_{2^{-n+1}}(Φ)$.
 # Setting $\frac{e^{ψ(α)}}{e^{ψ(β)}} = r$, the two equations we need to solve for $α$ and $β$ can be written
-# $$\begin{align}
+# ```{math}
+# :label: eq_root-finding-problem
+#
+# \begin{align}
 # ψ(α) - ψ(β) &= \ln r \,; \\
 # \ln\bigl[ ψ_1(α) + ψ_1(β) \bigr] &= \ln v \,.
-# \end{align}$$ (eq_root-finding-problem_supp)
-# (Definitions repeated from Eqs. \labelcref{eq_root-finding-problem__r,eq_root-finding-problem__v}.) Note that these equations are symmetric in $Φ$: replacing $Φ$ by $-Φ$ simply changes the sign on both sides of the first. The use of the logarithm in the equation for $v$ helps to stabilize the numerics.
+# \end{align}
+# ```
+# Note that these equations are symmetric in $Φ$: replacing $Φ$ by $-Φ$ simply changes the sign on both sides of the first. The use of the logarithm in the equation for $v$ helps to stabilize the numerics.
 
 # %%
 def f(lnαβ, lnr_v, _array=np.array, _exp=np.exp, _log=np.log,
@@ -263,7 +301,7 @@ def f_mid(lnα, v, _exp=np.exp, _log=np.log, polygamma=scipy.special.polygamma):
 # %% [markdown]
 # The functions $ψ$ and $ψ_1$ diverge at zero, so $α$ and $β$ should remain positive. Therefore it makes sense to fit their logarithm: this enforces the lower bound, and improves the resolution where the derivative is highest. The two objective functions (up to scalar shift) are plotted below: the region for low $\ln α$ and $\ln β$ shows sharp variation around $α=β$, suggesting that this area may be most challenging for a numerical optimizer. In practice this is indeed what we observed.
 #
-# We found however that we can make fits much more reliable by first choosing a suitable initialization point along the $\ln α = \ln β$ diagonal. In practice this means setting $α_0 = α = β$ and solving the 1d problem of Eq. \labelcref{eq_root-finding-problem__v} for $α_0$. (We use the implementation of Brent’s method in SciPy.) Then we can solve the full 2d problem of Eqs. \labelcref{eq_root-finding-problem__r,eq_root-finding-problem__v}, with $(α_0, α_0)$ as initial value. This procedure was successful for all values of $r$ and $v$ we encountered in our experiments.
+# We found however that we can make fits much more reliable by first choosing a suitable initialization point along the $\ln α = \ln β$ diagonal. In practice this means setting $α_0 = α = β$ and solving the first equation of Eqs. {eq}`eq_root-finding-problem` for $α_0$. (We use the implementation of Brent’s method in SciPy.) Then we can solve the full 2d problem of Eqs. {eq}`eq_root-finding-problem`, with $(α_0, α_0)$ as initial value. This procedure was successful for all values of $r$ and $v$ we encountered in our experiments.
 
 # %% tags=["active-ipynb", "hide-input"]
 # α = np.logspace(-2, 1.2)
@@ -304,7 +342,7 @@ def f_mid(lnα, v, _exp=np.exp, _log=np.log, polygamma=scipy.special.polygamma):
 # hv.save(fig, path.with_suffix(".pdf"), backend="matplotlib")
 
 # %% [markdown]
-# :::{figure} ../figures/path-sampling_polygamma.svg
+# :::{figure} ../../figures/path-sampling_polygamma.svg
 # :name: fig_polygamma
 #
 # Characterization of the digamma ($ψ$) and trigamma ($ψ_1$) functions, and of the metric variance $\Mvar$.  
@@ -326,12 +364,12 @@ def f_mid(lnα, v, _exp=np.exp, _log=np.log, polygamma=scipy.special.polygamma):
 # #glue("fig_Jac-spectrum", fig, display=False)
 
 # %% tags=["remove-cell", "active-ipynb"]
-# path = config.paths.figuresdir/f"path-sampling_jac-spectrum"
+# path = config.paths.figures/f"path-sampling_jac-spectrum"
 # hv.save(fig, path.with_suffix(".svg"), backend="matplotlib")
 # hv.save(fig, path.with_suffix(".pdf"), backend="matplotlib")
 
 # %% [markdown]
-# :::{figure} ../figures/path-sampling_jac-spectrum.svg
+# :::{figure} ../../figures/path-sampling_jac-spectrum.svg
 # :name: fig_Jac-spectrum
 #
 # **Objective function has a saddle-point around (0,0)**
@@ -388,14 +426,20 @@ def f_mid(lnα, v, _exp=np.exp, _log=np.log, polygamma=scipy.special.polygamma):
 # ^^^
 #
 # Having $v$ go to infinity requires that $α$ and/or $β$ go to $0$ (see Eq. {eq}`eq_root-finding-problem` and {numref}`fig_polygamma`). The probability density of $x_1$ is then a Dirac delta: placed at $x_1=0$ if $α \to 0$, or placed at $x_1 = 1$ if $β \to 0$. If both $α$ and $β$ go to $0$, the PDF must be the sum of two weighted deltas:
-# $$p(x_1) = w_0 δ(x_1 - 0) + w_1 δ(x_1 - 1) \,.$$
+# ```{math}
+# p(x_1) = w_0 δ(x_1 - 0) + w_1 δ(x_1 - 1) \,.
+# ```
 # The weights $w_i$ can be determined by requiring that
-# $$\EE[x_1] = r \,,$$
+# ```{math}
+# \EE[x_1] = r \,,
+# ```
 # which yields
-# $$\begin{aligned}
+# ```{math}
+# \begin{aligned}
 # w_1 &= \frac{r}{r+1}\,, & w_2 &= \frac{1}{r+1} \,.
-# \end{aligned}$$
-# (For this special case, we revert to writing the condition in terms of a standard (Lebesgue) expectation, since the center (Eq. \labelcref{eq_Aitchison-moments__EE}) is undefined when $α, β \to 0$.)
+# \end{aligned}
+# ```
+# (For this special case, we revert to writing the condition in terms of a standard (Lebesgue) expectation, since the center (Eq. {eq}`eq_Aitchison-moments`) is undefined when $α, β \to 0$.)
 #
 # Since we have already considered the special cases $r = 0$ and $r \to \infty$, we can assume $0 < r < \infty$. Then both $α$ and $β$ are zero, and $x_1$ should be a Bernoulli random variable with success probability $p = w_2 = \frac{1}{r+1}$.
 #
@@ -1256,7 +1300,7 @@ def generate_path_hierarchical_beta(
     return Φarr, qhat
 
 
-# %% tags=["active-ipynb", "hide-input"] editable=true slideshow={"slide_type": ""}
+# %% editable=true slideshow={"slide_type": ""} tags=["active-ipynb", "hide-input"]
 # qstar = np.log
 # σtilde = lambda Φ: 1.5*np.ones_like(Φ)
 # Φhat, qhat = generate_path_hierarchical_beta(
@@ -1384,7 +1428,7 @@ def generate_quantile_paths(qstar: Callable, deltaEMD: Callable, c: float,
 # %% [markdown]
 # ### Usage example
 
-# %% tags=["active-ipynb", "hide-input"] editable=true slideshow={"slide_type": ""}
+# %% editable=true slideshow={"slide_type": ""} tags=["active-ipynb", "hide-input"]
 # #Φtilde = np.linspace(0.01, 1, 20)
 # qstar = np.log
 # σtilde = lambda Φ: 1.5*np.ones_like(Φ)
@@ -1402,5 +1446,5 @@ def generate_quantile_paths(qstar: Callable, deltaEMD: Callable, c: float,
 #
 # hv.Overlay((*curves_qhat, curve_qstar)).opts(ylabel="")
 
-# %% tags=["remove-input", "active-ipynb"] editable=true slideshow={"slide_type": ""}
+# %% editable=true slideshow={"slide_type": ""} tags=["remove-input", "active-ipynb"]
 # GitSHA()

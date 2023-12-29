@@ -1,9 +1,42 @@
-# -*- coding: utf-8 -*-
+---
+jupytext:
+  encoding: '# -*- coding: utf-8 -*-'
+  formats: py:percent,md:myst
+  notebook_metadata_filter: -jupytext.text_representation.jupytext_version
+  text_representation:
+    extension: .md
+    format_name: myst
+    format_version: 0.13
+kernelspec:
+  display_name: Python (emd-falsify-dev)
+  language: python
+  name: emd-falsify-dev
+---
+
++++ {"editable": true, "slideshow": {"slide_type": ""}}
+
+# Configuration options
+
+```{code-cell}
+---
+editable: true
+slideshow:
+  slide_type: ''
+tags: [hide-input]
+---
 import uuid
 from pathlib import Path
 from typing import Optional, ClassVar, Union, Literal, Dict
 from configparser import ConfigParser
+```
 
+```{code-cell}
+---
+editable: true
+slideshow:
+  slide_type: ''
+tags: [hide-input]
+---
 from pydantic import BaseModel, Field, validator, root_validator
 # from mackelab_toolbox.config import ValidatingConfig, prepend_rootdir, ensure_dir_exists
 # from mackelab_toolbox.config.holoviews import FiguresConfig
@@ -11,24 +44,20 @@ from pydantic import BaseModel, Field, validator, root_validator
 from valconfig import ValConfig, ensure_dir_exists
 from valconfig.contrib.holoviews import FiguresConfig, HoloMPLConfig, HoloBokehConfig, GenericParam
 from scityping import Config as ScitypingConfig
+```
 
-# Possible improvement: If we could have nested config parsers, we might be 
-#     able to rely more on the ConfigParser machinery, and less on a custom
-#     Pydantic type, which should be easier for others to follow.
-#     In particular, the `colors` field could remain a config parser, although
-#     we would still want to allow dotted access.
+Possible improvement: If we could have nested config parsers, we might be 
+    able to rely more on the ConfigParser machinery, and less on a custom
+    Pydantic type, which should be easier for others to follow.
+    In particular, the `colors` field could remain a config parser, although
+    we would still want to allow dotted access.
 
+```{code-cell}
 class Config(ValConfig):
     __default_config_path__   = "defaults.cfg"
 
     class paths:
         figures : Path
-
-    #     _ensure_dir_exists = validator("figuresdir", allow_reuse=True
-    #                                   )(ensure_dir_exists)
-
-    # class random:
-    #     entropy: int
 
     class mp:
         max_cores: int
@@ -97,9 +126,25 @@ class Config(ValConfig):
         scityping.safe_packages |= {"emd_falsify.tasks"}
         # scityping.safe_packages |= {"emd_falsify.models", "emd_falsify.tasks"}
         return scityping
+```
 
+config = Config(Path(__file__).parent/"defaults.cfg",
+                config_module_name=__name__)
 
-# config = Config(Path(__file__).parent/"defaults.cfg",
-#                 config_module_name=__name__)
-
+```{code-cell}
+---
+editable: true
+slideshow:
+  slide_type: ''
+tags: [skip-execution]
+---
 config = Config()
+```
+
+# Default options
+
+These are stored in the text file `defaults.cfg`.
+
+```{include} defaults.cfg
+:literal: true
+```

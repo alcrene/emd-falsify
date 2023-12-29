@@ -1,6 +1,8 @@
 build
 *.joblib-cache
 *.pytest_cache
+*.jupyter
+*.jupyter_cache
 
 purgatory
 emd_falsify/*.md

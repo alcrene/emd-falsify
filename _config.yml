@@ -1,0 +1,108 @@
+#######################################################################################
+# A default configuration that will be loaded for all jupyter books
+# See the documentation for help and more options: 
+# https://jupyterbook.org/customize/config.html
+
+#######################################################################################
+# Book settings
+title                       : EMD-falsify  # The title of the book. Will be placed in the left navbar.
+author                      : Alexandre René  # The author of the book
+copyright                   : "2023"  # Copyright year to be placed in the footer
+logo                        : ""  # A path to the book logo
+exclude_patterns            : [_build, Thumbs.db, .DS_Store, "**.ipynb_checkpoints", ".*", "**.egg-info", "*.mypy_cache", "**__pycache__", "**/.pytest_cache",
+                               ".jupyter", ".jupyter_cache",
+                               "**purgatory", "**.smt"]
+
+# Force re-execution of notebooks on each build.
+# See https://jupyterbook.org/content/execute.html
+execute:
+  execute_notebooks: cache
+  cache            : ".jupyter_cache"
+  exclude_patterns : ["**purgatory",
+                      "tasks.md",  # Not executable as a notebook (Task is split over multiple cells)
+                    ]
+
+# Define the name of the latex output file for PDF builds
+latex:
+  latex_documents:
+    targetname: emd-falsify.tex
+
+# Parse and render settings
+parse:
+  myst_enable_extensions:  # default extensions to enable in the myst parser. See https://myst-parser.readthedocs.io/en/latest/using/syntax-optional.html
+    - amsmath
+    - colon_fence
+    - deflist
+    - dollarmath
+    # - html_admonition
+    - html_image
+    - linkify
+    - replacements
+    # - smartquotes
+    - substitution
+    - tasklist
+  myst_url_schemes: [mailto, http, https] # URI schemes that will be recognised as external URLs in Markdown links
+  myst_dmath_double_inline: true  # Allow display math ($$) within an inline context
+  myst_linkify_fuzzy_links: false
+  myst_dmath_allow_labels: true
+  myst_heading_anchors: 2
+  myst_substitutions:
+    prolog: |
+      ```{role} raw-latex(raw)
+          :format: latex
+      ```
+      ```{role} raw-html(raw)
+          :format: html
+      ```
+
+# Add a bibtex file so that we can create citations
+bibtex_bibfiles:
+  - references.bib
+
+# Information about where the book exists on the web
+repository:
+  url: https://github.com/alcrene/emd-falsify  # Online location of your book
+  path_to_book: docs  # Optional path to your book, relative to the repository root
+  branch: main  # Which branch of the repository should be used when creating links (optional)
+
+# Add GitHub buttons to your book
+# See https://jupyterbook.org/customize/config.html#add-a-link-to-your-repository
+html:
+  use_issues_button: true
+  use_repository_button: true
+
+# Sphinx options
+
+sphinx:
+  config:
+    mathjax_config:
+      # The `mtext` font is used for non-math symbols, like the content of `\text` commands.
+      # By inheriting this font, we ensure that textual elements in equations use the same font
+      # as the main text of our book. Otherwise text is rendered in the TeX Serif font, which looks out of place on a web page with sans serif.
+      # NB: Not just the font family, but the actual font is matched.
+      chtml:
+        mtextInheritFont: true
+      svg:
+        mtextInheritFont: true
+      tex:
+        macros:
+          "nN"    : "\\mathcal{N}"
+          "RR"    : "\\mathbb{R}"
+          "EE"   : "{\\mathbb{E}}"
+          "VV"   : "{\\mathbb{V}}"
+          "Unif"  : "\\mathop{\\mathrm{Unif}}"
+          "Beta" : "{\\mathop{\\mathrm{Beta}}}"
+          # emd.md
+          "D"     : "\\mathcal{D}"
+          "l"     : "l"
+          "Me"    : "\\mathcal{M}^ε"
+          "Philt" : ["\\widetilde{Φ}_{|#1}", 1]
+          "Bemd"  : ["B_{#1}^{\\mathrm{EMD}}", 1]
+          # path_sampling.md
+          "lnLtt": "{\\tilde{l}}"
+          "Mvar" : "{\\mathop{\\mathrm{Mvar}}}"
+          "pathP": "{\\mathop{\\mathcal{P}}}"
+          "lnLh" : "{\\hat{l}}"
+          "emdstd": "{\\tilde{σ}}"
+          "EMD"  : "{\\mathrm{EMD}}"
+

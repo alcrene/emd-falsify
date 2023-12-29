@@ -2,19 +2,19 @@
 # ---
 # jupyter:
 #   jupytext:
-#     formats: py:light,md:myst
+#     formats: py:percent,md:myst
+#     notebook_metadata_filter: -jupytext.text_representation.jupytext_version
 #     text_representation:
 #       extension: .py
-#       format_name: light
-#       format_version: '1.5'
-#       jupytext_version: 1.15.0
+#       format_name: percent
+#       format_version: '1.3'
 #   kernelspec:
-#     display_name: Python (emd-paper)
+#     display_name: Python (emd-falsify-dev)
 #     language: python
-#     name: emd-paper
+#     name: emd-falsify-dev
 # ---
 
-# + [markdown] editable=true slideshow={"slide_type": ""}
+# %% [markdown] tags=["remove-cell"] editable=true slideshow={"slide_type": ""}
 # ---
 # math:
 #   '\RR'    : '\mathbb{R}'
@@ -24,16 +24,14 @@
 #   '\Me'    : '\mathcal{M}^ε'
 #   '\Unif'  : '\mathop{\mathrm{Unif}}'
 #   '\Philt' : '\widetilde{Φ}_{|#1}'
-#   '\Elmu'  : 'μ_{{#1}}^{(1)}'
-#   '\Elsig' : 'Σ_{{#1}}^{(1)}'
 #   '\Bemd'  : 'B_{#1}^{\mathrm{EMD}}'
 # ---
 
-# + [markdown] editable=true slideshow={"slide_type": ""}
+# %% [markdown] editable=true slideshow={"slide_type": ""}
 # (supp_emd-implementation)=
 # # EMD implementation
 
-# + tags=["hide-input"] editable=true slideshow={"slide_type": ""}
+# %% editable=true slideshow={"slide_type": ""} tags=["hide-input"]
 import logging
 import multiprocessing as mp
 from collections.abc import Callable, Mapping
@@ -58,24 +56,24 @@ from emd_falsify.memoize import memoize
 
 config = Config()
 logger = logging.getLogger(__name__)
-# -
 
+# %%
 __all__ = ["interp1d", "make_empirical_risk_ppf", "draw_R_samples", "Bemd"]
 
-# + [markdown] tags=["remove-cell"] editable=true slideshow={"slide_type": ""}
+# %% [markdown] tags=["remove-cell"] editable=true slideshow={"slide_type": ""}
 # Notebook only imports
 
-# + tags=["active-ipynb", "remove-cell"] editable=true slideshow={"slide_type": ""}
+# %% editable=true slideshow={"slide_type": ""} tags=["active-ipynb", "remove-cell"]
 # from scipy import stats
 # import holoviews as hv
 # hv.extension(config.viz.backend)
 # logging.basicConfig(level=logging.WARNING)
 # logger.setLevel(logging.ERROR)
 
-# + editable=true slideshow={"slide_type": ""} tags=["active-ipynb", "remove-cell"]
+# %% editable=true slideshow={"slide_type": ""} tags=["active-ipynb", "remove-cell"]
 # colors = config.viz.matplotlib.colors["medium-contrast"]
 
-# + [markdown] editable=true slideshow={"slide_type": ""}
+# %% [markdown] editable=true slideshow={"slide_type": ""}
 # (supp_emd-implementation_example-sampling-paths)=
 # ## Path sampler test
 #
@@ -86,7 +84,7 @@ __all__ = ["interp1d", "make_empirical_risk_ppf", "draw_R_samples", "Bemd"]
 #
 # The upper part of the yellow region is never sampled, because monotonicity prevents paths from exceeding $\log 1$ at any point. The constant $c$ is determined by a calibration experiment, and controls the variability of paths. Here we use $c=1$.
 
-# + tags=["hide-input", "active-ipynb"] editable=true slideshow={"slide_type": ""}
+# %% editable=true slideshow={"slide_type": ""} tags=["hide-input", "active-ipynb"]
 # res = 7
 # #Φarr = np.arange(1, 2**res) / 2**res
 # qstar = np.log
@@ -109,7 +107,7 @@ __all__ = ["interp1d", "make_empirical_risk_ppf", "draw_R_samples", "Bemd"]
 #
 # GP_fig * Φ_fig
 
-# + [markdown] editable=true slideshow={"slide_type": ""}
+# %% [markdown] editable=true slideshow={"slide_type": ""}
 # Similar test, but we allow variability in the end point. Note that now samples samples can cover all of the yellow region.
 #
 # $$\begin{aligned}
@@ -117,12 +115,12 @@ __all__ = ["interp1d", "make_empirical_risk_ppf", "draw_R_samples", "Bemd"]
 # \tilde{σ} &= c \sin \frac{3 π Φ}{4} \,,  & c &\in \mathbb{R}_+ \,.
 # \end{aligned}$$
 
-# + [markdown] editable=true slideshow={"slide_type": ""}
+# %% [markdown] editable=true slideshow={"slide_type": ""}
 # $$\begin{aligned}
 # \tilde{\l} &= \log Φ\,, & Φ &\in [0, 1]
 # \end{aligned}$$
 
-# + editable=true slideshow={"slide_type": ""} tags=["active-ipynb", "hide-input"]
+# %% editable=true slideshow={"slide_type": ""} tags=["active-ipynb", "hide-input"]
 # res = 7
 # qstar = np.log
 # σtilde = lambda Φ: np.sin(Φ * 0.75*np.pi)
@@ -144,17 +142,17 @@ __all__ = ["interp1d", "make_empirical_risk_ppf", "draw_R_samples", "Bemd"]
 #
 # GP_fig * Φ_fig
 
-# + [markdown] editable=true slideshow={"slide_type": ""}
+# %% [markdown] editable=true slideshow={"slide_type": ""}
 # ## Serializable PPF functions
 
-# + [markdown] editable=true slideshow={"slide_type": ""}
+# %% [markdown] editable=true slideshow={"slide_type": ""}
 # ### Serializable 1d interpolator
 #
 # Our [workflow tasks](./tasks.py) require arguments to be serializable, which include the callable arguments used to compute the center $q^*$ and square root of the metric variance ($c δ^{\EMD}$). These functions are almost always going to be obtained by constructing an interpolator from empirical samples, and the obvious choice for that is *SciPy*’s `interp1d`. However this type is of course not serializable out of the box.
 #
 # We could define a custom version of `interp1d` (in fact we do) which adds serializability within our framework. However this would be bad form, requiring users to use special classes for seemingly obscure reasons. So instead we make the original class in `scipy.interpolate` serializable, following the format described in [*Defining serializers for preexisting types*](https://scityping.readthedocs.io/en/stable/defining-serializers.html) from the *scityping* documentation. In the process this does define a custom `interp1d` type, but in practice either this one or the standard one from `scipy.interpolate` can be used interchangeably.
 
-# + editable=true slideshow={"slide_type": ""}
+# %% editable=true slideshow={"slide_type": ""}
 from typing import Literal
 from dataclasses import dataclass
 import scipy.interpolate
@@ -180,7 +178,7 @@ class interp1d(Serializable, scipy.interpolate.interp1d):
             return (f.x, f.y, f._kind, f.axis, f.copy, f.bounds_error, f.fill_value)
 
 
-# + [markdown] editable=true slideshow={"slide_type": ""}
+# %% [markdown] editable=true slideshow={"slide_type": ""}
 # ## Estimate the risk quantile function
 #
 # Also known as the point probability function (PPF), this is the function $q(Φ)$ required by `draw_R_samples` to draw samples of the expected risk. Note that this is the quantile function *of the risk*, not of models predictions, so it is always a 1d function.
@@ -192,12 +190,12 @@ class interp1d(Serializable, scipy.interpolate.interp1d):
 # - The EMD approximation defines a distribution over quantile functions of the risk.
 #   - It sets the square root of the *metric variance* at $Φ$ to be proportional to the discrepancy between $q^*(Φ)$ and $\tilde{q}(Φ)$.
 
-# + [markdown] editable=true slideshow={"slide_type": ""}
+# %% [markdown] editable=true slideshow={"slide_type": ""}
 # In some cases it may be possible to derive $q$ analytically from a models equations, but in general we need to estimate it from samples. Concretelly all this does is construct a `scipy.interpolate.interp1d` object: if $L$ risk samples are given, they are sorted, and assigned the cumulative probabilities $Φ = \frac{1}{L+1}, \frac{2}{L+1}, \dotsc, \frac{L}{L+1}$. Intermediate values are obtained by linear interpolation. We don’t assign  the $Φ=0$ and $Φ=1$, since it is more conservative to assume that the absolute extrema have not been sampled – instead we use linear extrapolation for the small intervals $\bigl[0, \frac{1}{L+1}\bigr)$ and $\bigl(\frac{L}{L+1}, 1\bigr]$.
 #
 # If users want to use different assumptions – for example if users know that the highest possible risk is part of the sample set – then they may construct the `scipy.interpolate.interp1d` object directly.
 
-# + editable=true slideshow={"slide_type": ""}
+# %% editable=true slideshow={"slide_type": ""}
 def make_empirical_risk_ppf(risk_samples: Array[float,1]):
     """Convert a set of samples into a callable and serializable PPF function.
 
@@ -237,7 +235,7 @@ def make_empirical_risk_ppf(risk_samples: Array[float,1]):
     return interp1d(Φarr, np.sort(risk_samples), fill_value="extrapolate")
 
 
-# + [markdown] editable=true slideshow={"slide_type": ""}
+# %% [markdown] editable=true slideshow={"slide_type": ""}
 # ## Draw samples of the expected risk $R$
 #
 # **Given**
@@ -254,17 +252,18 @@ def make_empirical_risk_ppf(risk_samples: Array[float,1]):
 #
 # See {prf:ref}`alg-estimator-statistics`.
 
-# + [markdown] editable=true slideshow={"slide_type": ""}
+# %% [markdown] editable=true slideshow={"slide_type": ""}
 # :::{margin}  
 # The rule for computing `new_M` comes from the following ($ε$: `stderr`, $ε_t$: `stderr_tol`, $M'$: `new_M`)
-# $$\begin{aligned}
+# ```{math}
 # ε &= σ/\sqrt{M} \\
 # ε' &= σ/\sqrt{M'} \\
 # \frac{ε^2}{ε'^2} &= \frac{M'}{M}
-# \end{aligned}$$
+# \end{aligned}
+# ```
 # :::
 
-# + editable=true slideshow={"slide_type": ""} tags=["remove-cell"]
+# %% editable=true slideshow={"slide_type": ""} tags=["remove-cell"]
 @memoize(ignore=["path_progbar"])
 def draw_R_samples(mixed_risk_ppf: Callable,
                    synth_risk_ppf: Callable,
@@ -394,7 +393,7 @@ def draw_R_samples(mixed_risk_ppf: Callable,
     return np.array(m1)
 
 
-# + [markdown] editable=true slideshow={"slide_type": ""}
+# %% [markdown] editable=true slideshow={"slide_type": ""}
 # ### Test sampling of expected risk $R$
 #
 # $$\begin{aligned}
@@ -420,7 +419,7 @@ def draw_R_samples(mixed_risk_ppf: Callable,
 #
 # Within the EMD framework, models are compared as usual based on their expected risk $R$. This captures aleatoric uncertainty – i.e. randomness inherent to the model, such as the $ξ$ process above. The EMD criterion then further captures *epistemic* uncertainty by treating $R$ as a random variable, and considering *its* distribution. Roughly speaking, the better a model is at predicting the data distribution, the tighter its $R$ distribution will be. (For example, a model can have a lot of noise, but if we can predict the statistics of that noise accurately, then the distribution on $R$ will be tight and its uncertainty low.)
 
-# + editable=true slideshow={"slide_type": ""} tags=["active-ipynb", "hide-input"]
+# %% editable=true slideshow={"slide_type": ""} tags=["active-ipynb", "hide-input"]
 # λ = 1
 # λB = 1.2
 # σ = 0.25
@@ -464,13 +463,13 @@ def draw_R_samples(mixed_risk_ppf: Callable,
 # mixed_ppfB = make_empirical_risk_ppf(riskB(observed_data))
 # synth_ppfB = make_empirical_risk_ppf(riskB(synth_dataB))
 
-# + [markdown] editable=true slideshow={"slide_type": ""}
+# %% [markdown] editable=true slideshow={"slide_type": ""}
 # In this example, the discrepancy between the theoretical models and the observed data distribution is very small, so the differences between quantile curves is similarly very small.
 #
 # - **Synthetic** PPF — Same theoretical model for both the defining the risk and generating the (synthetic) data.
 # - **Mixed** PPF – Different models for the risk and data: Again a theoretical model is used to define the risk, but now it is evaluated on real observed data.
 
-# + editable=true slideshow={"slide_type": ""} tags=["active-ipynb", "hide-input"]
+# %% editable=true slideshow={"slide_type": ""} tags=["active-ipynb", "hide-input"]
 # # Data panel
 # xarr = np.linspace(0, 3)
 # scat_data = hv.Scatter(zip(*observed_data), group="data", label="data")
@@ -484,7 +483,7 @@ def draw_R_samples(mixed_risk_ppf: Callable,
 #     hv.opts.Curve("model B", color=colors["dark red"], alpha=0.7)
 # )
 
-# + editable=true slideshow={"slide_type": ""} tags=["hide-input", "active-ipynb"]
+# %% editable=true slideshow={"slide_type": ""} tags=["hide-input", "active-ipynb"]
 # # Quantile function panels
 # Φarr = np.linspace(0, 1, 100)
 # curve_synthA = hv.Curve(zip(Φarr, synth_ppfA(Φarr)), kdims=["Φ"], vdims=["q"], group="synth", label="model A")
@@ -508,7 +507,7 @@ def draw_R_samples(mixed_risk_ppf: Callable,
 #     hv.opts.Layout(sublabel_format="")
 # )
 
-# + editable=true slideshow={"slide_type": ""} tags=["active-ipynb", "hide-input"]
+# %% editable=true slideshow={"slide_type": ""} tags=["active-ipynb", "hide-input"]
 # # R dist panels
 # RA_lst = draw_R_samples(mixed_ppfA, synth_ppfA, c=1, M=100, print_relstderr=True)
 # RB_lst = draw_R_samples(mixed_ppfB, synth_ppfB, c=1, M=100, print_relstderr=True)
@@ -522,13 +521,13 @@ def draw_R_samples(mixed_risk_ppf: Callable,
 # panel_RA = distA * RAlines
 # panel_RB = distB * RBlines
 
-# + [markdown] editable=true slideshow={"slide_type": ""}
+# %% [markdown] editable=true slideshow={"slide_type": ""}
 # Each model induces a distribution for its expected risk, so with two models $A$ and $B$ we have distributions for $R_A$ and $R_B$.
 # The figures below show the sampled values for $R_A$ and $R_B$, along overlayed with a kernel density estimate of their distribution.
 #
 # In this case both distributions are very tight, and any difference between them are due as much to finite sampling than to the likelihood picking up which one is the better fit. This translates into distributions with very high overlap, and therefore a probability approximately ½ that model $A$ is better than $B$. In other words, the criterion is *equivocal* between $A$ and $B$, as we expected.
 
-# + editable=true slideshow={"slide_type": ""} tags=["active-ipynb", "hide-input"]
+# %% editable=true slideshow={"slide_type": ""} tags=["active-ipynb", "hide-input"]
 # fig = panel_RA + panel_RB + panel_RA*panel_RB
 #
 # panel_RA.opts(
@@ -546,16 +545,18 @@ def draw_R_samples(mixed_risk_ppf: Callable,
 #     hv.opts.Layout(sublabel_format="")
 # )
 
-# + editable=true slideshow={"slide_type": ""} tags=["active-ipynb"]
+# %% editable=true slideshow={"slide_type": ""} tags=["active-ipynb"]
 # (supp_emd-implementation_Bemd)=
-# ## Implementation of $\Bemd{AB;c}$
+# ## Implementation of $B^{\mathrm{emd}}_{AB;c}$
 
-# + [markdown] editable=true slideshow={"slide_type": ""}
+# %% [markdown] editable=true slideshow={"slide_type": ""}
 # The EMD criterion is defined as
-# $$\begin{aligned}
+# ```{math}
+# \begin{aligned}
 # \Bemd{AB;c} &:= P(R_A < R_B \mid c) \\
 #     &\approx \frac{1}{M_A M_B} \sum_{i=1}^{M_A} \sum_{j=1}^{M_B} \boldsymbol{1}_{R_{A,i} < R_{B,j}}\,,
-# \end{aligned}$$
+# \end{aligned}
+# ```
 # where $c$ is a scale parameter and $M_A$ (resp. $M_B$) is the number of samples of $R_A$ (resp. $R_B$). The expression $\boldsymbol{1}_{R_{A,i} < R_{B,j}}$ is one when $R_{A,i} < R_{B,j}$ and zero otherwise.
 # We can write the sum as nested Python loops:
 #
@@ -563,23 +564,23 @@ def draw_R_samples(mixed_risk_ppf: Callable,
 # (`RA_lst` and `RB_lst` are the expected risk samples generated in the example above.)
 # :::
 
-# + editable=true slideshow={"slide_type": ""} tags=["active-ipynb"]
+# %% editable=true slideshow={"slide_type": ""} tags=["active-ipynb"]
 # s = 0
 # for rA in RA_lst:
 #     for rB in RB_lst:
 #         s += (rA < rB)
 # s / len(RA_lst) / len(RB_lst)
 
-# + [markdown] editable=true slideshow={"slide_type": ""}
+# %% [markdown] editable=true slideshow={"slide_type": ""}
 # However it is much faster (about 50x in this case) to use a NumPy ufunc:
 
-# + editable=true slideshow={"slide_type": ""} tags=["active-ipynb"]
+# %% editable=true slideshow={"slide_type": ""} tags=["active-ipynb"]
 # np.less.outer(RA_lst, RB_lst).mean()
 
-# + [markdown] editable=true slideshow={"slide_type": ""}
+# %% [markdown] editable=true slideshow={"slide_type": ""}
 # The `Bemd` function is essentially a convenience function for comparing two models, which calls `draw_R_samples` (once for each models) and then computes the criterion value as above.
 
-# + editable=true slideshow={"slide_type": ""}
+# %% editable=true slideshow={"slide_type": ""}
 def mp_wrapper(f: Callable, *args, out: "mp.queues.Queue", **kwargs):
     "Wrap a function by putting its return value in a Queue. Used for multiprocessing."
     out.put(f(*args, **kwargs))
@@ -587,7 +588,7 @@ def mp_wrapper(f: Callable, *args, out: "mp.queues.Queue", **kwargs):
 LazyPartial = Union[Callable, Tuple[Callable, Mapping]]
 
 
-# + editable=true slideshow={"slide_type": ""}
+# %% editable=true slideshow={"slide_type": ""}
 @memoize(ignore=["progbarA", "progbarB", "use_multiprocessing"])
 def Bemd(mixed_risk_ppfA: Callable, mixed_risk_ppfB: Callable,
          synth_risk_ppfA: Callable, synth_risk_ppfB: Callable,
@@ -735,12 +736,12 @@ def Bemd(mixed_risk_ppfA: Callable, mixed_risk_ppfB: Callable,
     
     return np.less.outer(RA_lst, RB_lst).mean()
 
-# + [markdown] editable=true slideshow={"slide_type": ""}
+# %% [markdown] editable=true slideshow={"slide_type": ""}
 # Calling `Bemd` returns the same value as above, up to sampling error:
 
-# + tags=["active-ipynb"] editable=true slideshow={"slide_type": ""}
+# %% editable=true slideshow={"slide_type": ""} tags=["active-ipynb"]
 # Bemd(mixed_ppfA, mixed_ppfB, synth_ppfA, synth_ppfB, c=1)
 
-# + editable=true slideshow={"slide_type": ""} tags=["active-ipynb", "remove-input"]
+# %% editable=true slideshow={"slide_type": ""} tags=["active-ipynb", "remove-input"]
 # from emd_falsify.utils import GitSHA
 # GitSHA()

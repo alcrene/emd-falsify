@@ -1,21 +1,49 @@
+# -*- coding: utf-8 -*-
+# ---
+# jupyter:
+#   jupytext:
+#     formats: py:percent,md:myst
+#     notebook_metadata_filter: -jupytext.text_representation.jupytext_version
+#     text_representation:
+#       extension: .py
+#       format_name: percent
+#       format_version: '1.3'
+#   kernelspec:
+#     display_name: Python (emd-falsify-dev)
+#     language: python
+#     name: emd-falsify-dev
+# ---
+
+# %% editable=true slideshow={"slide_type": ""}
 from __future__ import annotations
 
+# %%
 import numpy as np
 import pandas as pd
 import matplotlib as mpl
 import seaborn as sns
 import holoviews as hv
 
+# %%
 from dataclasses import dataclass
 from typing import Optional, Dict, List
 
+# %% editable=true raw_mimetype="" slideshow={"slide_type": ""} tags=["skip-execution"]
 from .config import config
 from . import utils
 
+# %% editable=true slideshow={"slide_type": ""} tags=["active-ipynb", "remove-cell"]
+# from config import config
+# import utils
+
+# %%
 dash_patterns = ["dotted", "dashed", "solid"]
 
-## Plotting functions ##
 
+# %% [markdown]
+# # Plotting functions
+
+# %%
 @dataclass
 class CalibrationPlotElements:
     """
@@ -36,6 +64,8 @@ class CalibrationPlotElements:
     def _repr_mimebundle_(self, *args, **kwds):
         return (self.prohibited_areas * self.discouraged_areas * self.calibration_curves)._repr_mimebundle_(*args, **kwds)
 
+
+# %%
 def calibration_bins(calib_results: CalibrateResult,
                      target_bin_size: Optional[int]=None):
     """Return the bin edges for the histograms produced by `calibration_plot`.
@@ -56,6 +86,8 @@ def calibration_bins(calib_results: CalibrateResult,
         bin_edges[c] = edges
     return bin_edges
 
+
+# %%
 def calibration_plot(calib_results: CalibrateResult,
                      target_bin_size: Optional[int]=None
                     ) -> CalibrationPlotElements:
@@ -133,9 +165,10 @@ def calibration_plot(calib_results: CalibrateResult,
         calib_hmap, prohibited_areas, discouraged_area_1*discouraged_area_2,
         calib_bins)
 
-
+# %% [markdown]
 # sanitize = hv.core.util.sanitize_identifier_fn
 
+# %% [markdown]
 # def plot_R_bars(df_emd_cond: pd.DataFrame, data_label: str,
 #                    colors: list[str], size_dim: str, xformatter=None
 #     ) -> hv.Overlay:
@@ -147,6 +180,7 @@ def calibration_plot(calib_results: CalibrateResult,
 #     of the columns of the DataFrame `df_emd_cond`; `size_dim` indicates the
 #     name of this column.
 
+# %% [markdown]
 #     `colors` must be a list at least as long as the number of rows in `df_emd_cond`.
 #     `size_dim` must match the name of the index level in the DataFrame
 #     used to indicate the dataset size.
@@ -157,7 +191,8 @@ def calibration_plot(calib_results: CalibrateResult,
 #     logL_dim = hv.Dimension("logL", label=data_label)
 #     y_dim = hv.Dimension("y", label=" ", range=(-0.5, max(size_marker_heights)))
 #     size_dim = hv.Dimension("data_size", label=size_dim)
-    
+
+# %% [markdown]
 #     ## Construct the actual lines marking the log likelihood ##
 #     vlines = [hv.Path([[(logL, -0.5), (logL, 1)]], kdims=[logL_dim, y_dim],
 #                       group=size, label=model_lbl)
@@ -166,13 +201,15 @@ def calibration_plot(calib_results: CalibrateResult,
 #                   .opts(linestyle=dash_pattern, backend="matplotlib")
 #               for (size, dash_pattern) in zip(df_emd_cond.index, dash_patterns)
 #               for (model_lbl, logL), c in zip(df_emd_cond.loc[size].items(), colors)]
-    
+
+# %% [markdown]
 #     # Legend proxies (Required because Path elements are not included in the legend)
 #     legend_proxies = [hv.Curve([(0,0)], label=f"model: {model_lbl}")
 #                           .opts(color=c)
 #                           .opts(linewidth=3, backend="matplotlib")
 #                       for model_lbl, c in zip(df_emd_cond.columns, colors)]
 
+# %% [markdown]
 #     ## Construct the markers indicating data set sizes ##
 #     # These are composed of a horizontal segment above the log L markers, and a label describing the data set size
 #     logp_centers = (df_emd_cond.max(axis="columns") + df_emd_cond.min(axis="columns"))/2
@@ -180,18 +217,22 @@ def calibration_plot(calib_results: CalibrateResult,
 #         (logp_centers, size_marker_heights, size_labels),
 #         index=["x", "y", size_dim.name]
 #     ).T
-    
+
+# %% [markdown]
 #     size_labels_labels = hv.Labels(df_size_labels, kdims=["x", "y"], vdims=size_dim)
-    
+
+# %% [markdown]
 #     size_markers = hv.Segments(dict(logL=df_emd_cond.min(axis="columns"),
 #                                     logL_right=df_emd_cond.max(axis="columns"),
 #                                     y0=size_marker_heights.to_numpy(),
 #                                     y1=size_marker_heights.to_numpy()),
-#                                [logL_dim, "y0", "logL_right", "y1"]) 
+#                                [logL_dim, "y0", "logL_right", "y1"])
 
+# %% [markdown]
 #     ## Assemble and configure options ##
 #     ov = hv.Overlay([*vlines, *legend_proxies, size_markers, size_labels_labels])
-    
+
+# %% [markdown]
 #     # For some reason, applying these opts separately is more reliable with matplotlib backend
 #     size_markers.opts( 
 #         hv.opts.Segments(color="black"),
@@ -220,6 +261,6 @@ def calibration_plot(calib_results: CalibrateResult,
 #     if xformatter:
 #         ov.opts(xformatter=xformatter, backend="bokeh")
 #     ov.opts(hooks=[no_spine_hook("left")], backend="matplotlib")
-    
-#     return ov
 
+# %% [markdown]
+#     return ov
