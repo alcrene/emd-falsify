@@ -263,7 +263,7 @@ def make_empirical_risk_ppf(risk_samples: Array[float,1]):
 # ```
 # :::
 
-# %% editable=true slideshow={"slide_type": ""} tags=["remove-cell"]
+# %% editable=true slideshow={"slide_type": ""}
 @memoize(ignore=["path_progbar"])
 def draw_R_samples(mixed_risk_ppf: Callable,
                    synth_risk_ppf: Callable,

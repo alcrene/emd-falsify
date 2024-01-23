@@ -45,7 +45,7 @@ $\renewcommand{\lnLh}[1][]{\hat{l}_{#1}}
 \renewcommand{\emdstd}[1][]{\tilde{σ}_{{#1}}}$
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 ---
 editable: true
 slideshow:
@@ -58,7 +58,7 @@ tags: [active-ipynb, remove-cell]
 # jax.config.update("jax_enable_x64", True)
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 :tags: [hide-input]
 
 import logging
@@ -85,7 +85,7 @@ from emd_falsify.digitize import digitize  # Used to improve numerical stability
 
 Notebook-only imports
 
-```{code-cell}
+```{code-cell} ipython3
 ---
 editable: true
 slideshow:
@@ -103,7 +103,7 @@ from config import config  # Uses config from CWD
 hv.extension(config.viz.backend)
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 :tags: [remove-cell]
 
 logger = logging.getLogger(__name__)
@@ -181,7 +181,7 @@ We have found that failure to satisfy this requirement leads to unsatisfactory s
 Recall that we made the assumption that the variability of the path process $\pathP$ should determined by $δ^{\EMD}$, up to some constant $c$.{cite:p}`reneFalsifyingModels2024` This constant is determined by a calibration experiment.
 To keep expressions concise, in this section we use $\emdstd(Φ) := c δ^{\EMD}(Φ)$.
 :::
-To draw an increment $Δ l_{2^{-n}}$, we need to convert $\lnLtt(Φ)$ and $\emdstd(Φ) := c δ^{\EMD}(Φ)$ into beta distribution parameters $α$ and $β$. If $x_1$ follows a beta distribution, then its first two cumulants are given by
+To draw an increment $Δ l_{2^{-n}}$, we need to convert $\lnLtt(Φ)$ and $\emdstd(Φ) := \sqrt{c}\, δ^{\EMD}(Φ)$ into beta distribution parameters $α$ and $β$. If $x_1$ follows a beta distribution, then its first two cumulants are given by
 ```{math}
 \begin{aligned}
 x_1 &\sim \Beta(α, β) \,, \\
@@ -286,7 +286,7 @@ Setting $\frac{e^{ψ(α)}}{e^{ψ(β)}} = r$, the two equations we need to solve 
 ```
 Note that these equations are symmetric in $Φ$: replacing $Φ$ by $-Φ$ simply changes the sign on both sides of the first. The use of the logarithm in the equation for $v$ helps to stabilize the numerics.
 
-```{code-cell}
+```{code-cell} ipython3
 def f(lnαβ, lnr_v, _array=np.array, _exp=np.exp, _log=np.log,
       digamma=scipy.special.digamma, polygamma=scipy.special.polygamma):
     α, β = _exp(lnαβ).reshape(2, -1)  # scipy's `root` always flattens inputs
@@ -301,7 +301,7 @@ def f_mid(lnα, v, _exp=np.exp, _log=np.log, polygamma=scipy.special.polygamma):
     return _log(2*polygamma(1, _exp(lnα))) - _log(v)
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 :tags: [active-ipynb, remove-cell]
 
 # #@partial(jax.jit, static_argnames=("_array", "_exp", "_log", "digamma", "polygamma"))
@@ -325,7 +325,7 @@ This implementation of the Jacobian is tested for both scalar and vector inputs,
 Therefore we keep it only for reference and illustration purposes.  
 :::
 
-```{code-cell}
+```{code-cell} ipython3
 :tags: [active-ipynb]
 
 def jac(lnαβ, lnr_v):
@@ -340,7 +340,7 @@ The functions $ψ$ and $ψ_1$ diverge at zero, so $α$ and $β$ should remain po
 
 We found however that we can make fits much more reliable by first choosing a suitable initialization point along the $\ln α = \ln β$ diagonal. In practice this means setting $α_0 = α = β$ and solving the first equation of Eqs. {eq}`eq_root-finding-problem` for $α_0$. (We use the implementation of Brent’s method in SciPy.) Then we can solve the full 2d problem of Eqs. {eq}`eq_root-finding-problem`, with $(α_0, α_0)$ as initial value. This procedure was successful for all values of $r$ and $v$ we encountered in our experiments.
 
-```{code-cell}
+```{code-cell} ipython3
 :tags: [active-ipynb, hide-input]
 
 α = np.logspace(-2, 1.2)
@@ -354,7 +354,7 @@ domλ = np.array([[(ReJ:=np.real(np.linalg.eigvals(jac(np.stack((lnα, lnβ)), 0
                    for lnα in np.log(α.flat)])
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 :tags: [active-ipynb, hide-input]
 
 dim_lnα = hv.Dimension("lnα", label=r"$\ln α$")
@@ -379,7 +379,7 @@ fig.cols(2);
 #glue("fig_polygamma", fig, display=None)
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 :tags: [remove-cell, active-ipynb]
 
 path = config.paths.figures/f"path-sampling_polygamma"
@@ -401,7 +401,7 @@ Note that the color scale is clipped, to better resolve values near zero. Eigenv
 
 It turns out that the only region where $(0, 0)$ is *not* a good initial vector for the root solver is when $\boldsymbol{r \approx 1}$. This can be resolved by choosing a better initial value along the $(α_0, α_0)$ diagonal, as described above. In practice we found no detriment to always using the 1d problem to select an initial vector, so we use that approach in all cases.
 
-```{code-cell}
+```{code-cell} ipython3
 :tags: [active-ipynb, hide-input]
 
 fig = hv.QuadMesh((np.log(α.flat), np.log(β.flat), domλ),
@@ -412,7 +412,7 @@ fig = hv.QuadMesh((np.log(α.flat), np.log(β.flat), domλ),
 #glue("fig_Jac-spectrum", fig, display=False)
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 :tags: [remove-cell, active-ipynb]
 
 path = config.paths.figures/f"path-sampling_jac-spectrum"
@@ -500,7 +500,7 @@ Since we have already considered the special cases $r = 0$ and $r \to \infty$, w
 ::::
 :::::
 
-```{code-cell}
+```{code-cell} ipython3
 :tags: [active-ipynb]
 
 def get_beta_rv(r: Real, v: Real) -> Tuple[float]:
@@ -546,7 +546,7 @@ def get_beta_rv(r: Real, v: Real) -> Tuple[float]:
     return scipy.stats.beta(α, β)
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 :tags: [remove-cell, active-ipynb]
 
 # import jaxopt
@@ -563,13 +563,13 @@ def get_beta_rv(r: Real, v: Real) -> Tuple[float]:
 #     return res.params, res.state.success
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 def scipy_mvroot_solver(fun, x0, args, method, root=scipy.optimize.root):
     res = root(fun, x0, args, method)
     return res.x, res.success
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 :tags: [hide-input]
 
 def _draw_from_beta_scalar(r: Real, v: Real, rng: RNGenerator, n_samples: int=1,
@@ -651,7 +651,7 @@ def draw_from_beta(r: Union[Real,Array[float,1]],
         return _draw_from_beta_scalar(r, v, rng, n_samples)
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 :tags: [hide-input, active-ipynb, remove-cell]
 
 # # We can’t jit because ScipyRootFinding.run (in the normal branch) is not jittable
@@ -708,7 +708,7 @@ def draw_from_beta(r: Union[Real,Array[float,1]],
 #     return beta(subkey, α, β, shape=size)
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 :tags: [active-ipynb, remove-cell]
 
 # # Does not work: _draw_from_beta_scalar_jax needs to be traceable
@@ -738,7 +738,7 @@ def draw_from_beta(r: Union[Real,Array[float,1]],
 #     return rng, x
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 :tags: [remove-cell, active-ipynb]
 
 # # Does not work: _draw_from_beta_scalar_jax needs to be traceable
@@ -752,7 +752,7 @@ def draw_from_beta(r: Union[Real,Array[float,1]],
 
 Plotted below are the beta distributions for different values of $r$ and $v$.
 
-```{code-cell}
+```{code-cell} ipython3
 :tags: [active-ipynb, hide-input, full-width]
 
 %%opts Curve [title="Fitted beta distributions", ylim=(None,7)]
@@ -815,7 +815,7 @@ dists.opts(fig_inches=7, aspect=2.5, legend_cols=2, backend="matplotlib")
 
 Extra test, for a point that is especially sensitive to numerical issues: despite the very tight distribution, only 10-25% points raise a warning.
 
-```{code-cell}
+```{code-cell} ipython3
 :tags: [remove-cell, skip-execution, active-ipynb]
 
 r=2.2691824192512438;    Δr = 0.000000000000001
@@ -828,7 +828,7 @@ for r,v in rng.uniform([r-s*Δr, v-s*Δv], [r+s*Δr, v+s*Δv], size=(40,2)):
 
 Statistics for the fitted beta distributions. $\mathbb{E}[x_1]$ and $\mathrm{std}[x_1]$ are computed from 4000 samples. $\mathbb{E}_a[x_1]$ and $\mathrm{Mvar}[x_1,x_2]$ are computed using the expressions above.
 
-```{code-cell}
+```{code-cell} ipython3
 :tags: [active-ipynb, hide-input, full-width]
 
 def clean_table_mpl(plot, element):
@@ -852,7 +852,7 @@ stattable.opts(fig_inches=18, aspect=2.5, max_value_len=30, hooks=[clean_table_m
 
 `draw_from_beta` also supports passing `r` and `v` as vectors. This is mostly a convenience: internally the vectors are unpacked and $(α,β)$ are solved for individually.
 
-```{code-cell}
+```{code-cell} ipython3
 :tags: [active-ipynb, skip-execution, remove-cell, full-width]
 
 r_vals, v_vals = np.array(
@@ -900,7 +900,7 @@ stattable.opts(fig_inches=14, aspect=1.8, max_value_len=30, hooks=[clean_table_m
   + Alternatively, perhaps one can rework the problem so that finding the $α, β$ pair does not require solving a 2-d optimization problem, but some other type of problem for which `jaxopt` has a jittable function.
 :::
 
-```{code-cell}
+```{code-cell} ipython3
 :tags: [remove-cell, active-ipynb]
 
 # %timeit jax.random.split(subkey)
@@ -1122,7 +1122,7 @@ stattable.opts(fig_inches=14, aspect=1.8, max_value_len=30, hooks=[clean_table_m
   - 1.28 ms ± 33.4 µs 
 :::
 
-```{code-cell}
+```{code-cell} ipython3
 :tags: [active-ipynb, remove-cell]
 
 # r_vals, v_vals = np.array(
@@ -1133,7 +1133,7 @@ stattable.opts(fig_inches=14, aspect=1.8, max_value_len=30, hooks=[clean_table_m
 # ).T
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 :tags: [active-ipynb, remove-cell]
 
 # key = jax.random.PRNGKey(0)
@@ -1152,7 +1152,7 @@ stattable.opts(fig_inches=14, aspect=1.8, max_value_len=30, hooks=[clean_table_m
 #     return ResData(avgs[i], stds[i], diff_percent)
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 :tags: [remove-cell, active-ipynb]
 
 # try:
@@ -1164,7 +1164,7 @@ stattable.opts(fig_inches=14, aspect=1.8, max_value_len=30, hooks=[clean_table_m
 #                     for (L, r, v, npa, npb, npc, jaxa, jaxb, jaxc) in time_data}
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 :tags: [active-ipynb, remove-cell]
 
 # def timing_run(func, desc, rng_lst, time_results):
@@ -1184,13 +1184,13 @@ stattable.opts(fig_inches=14, aspect=1.8, max_value_len=30, hooks=[clean_table_m
 #             time_results[(L, r, v, desc)] = get_resdata(res_lst)
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 :tags: [active-ipynb, remove-cell, skip-execution]
 
 # timing_run(_draw_from_beta_scalar_jax, "jax, functional", subkeys, time_results=time_results)
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 :tags: [active-ipynb, remove-cell]
 
 # progL = tqdm([1], desc="Sample size")  # [1, 7, 49, 343]
@@ -1210,7 +1210,7 @@ stattable.opts(fig_inches=14, aspect=1.8, max_value_len=30, hooks=[clean_table_m
 #         time_results[(L, r, v)] = (get_resdata(res_np), get_resdata(res_jax))
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 :tags: [remove-cell, active-ipynb]
 
 # _time_data = np.array([
@@ -1219,13 +1219,13 @@ stattable.opts(fig_inches=14, aspect=1.8, max_value_len=30, hooks=[clean_table_m
 # ])
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 :tags: [active-ipynb, remove-cell]
 
 # np.save("timing_cache_jax-vs-numpy_draw-from-beta", _time_data)
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 # for ((L, r, v, npa, npb, npc, jaxa, jaxb, jaxc),
 #      (_, _, _, _npa, _npb, _npc, _jaxa, _jaxb, _jaxc)) in zip(time_data, _time_data):
 #     print("* -", int(L))
@@ -1237,7 +1237,7 @@ stattable.opts(fig_inches=14, aspect=1.8, max_value_len=30, hooks=[clean_table_m
 #     print("  -", time_str(ResData(_jaxa, _jaxb, _jaxc)))                       
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 :tags: [remove-cell, active-ipynb]
 
 # def format_with_unit(val, unit):
@@ -1342,7 +1342,7 @@ time_table.opts(aspect=4, fig_inches=7)
 
 Now that we know how to construct an sampling distribution for the increments, sampling an entire path is just a matter of repeating the process recursively until we reach the desired resolution.
 
-```{code-cell}
+```{code-cell} ipython3
 def generate_path_hierarchical_beta(
         qstar: Callable, deltaEMD: Callable, c: float,
         qstart: float, qend: float, res: int=8, rng=None,
@@ -1422,7 +1422,7 @@ def generate_path_hierarchical_beta(
     return Φarr, qhat
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 ---
 editable: true
 slideshow:
@@ -1450,7 +1450,7 @@ To generate $R$ paths, we repeat the following $R$ times:
 1. Select start and end points by sampling $\nN(\tilde{Φ}[0], \lnLtt{}[0])$ and $\nN(\tilde{Φ}[-1], \lnLtt{}[-1])$.
 2. Call `generate_path_hierarchical_beta`.
 
-```{code-cell}
+```{code-cell} ipython3
 ---
 editable: true
 slideshow:
@@ -1562,7 +1562,7 @@ def generate_quantile_paths(qstar: Callable, deltaEMD: Callable, c: float,
 
 ### Usage example
 
-```{code-cell}
+```{code-cell} ipython3
 ---
 editable: true
 slideshow:
@@ -1587,7 +1587,7 @@ curve_qstar = hv.Curve(zip(Φtilde, qstar(Φtilde)), label=r"$\tilde{l}$", kdims
 hv.Overlay((*curves_qhat, curve_qstar)).opts(ylabel="")
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 ---
 editable: true
 slideshow:

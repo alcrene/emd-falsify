@@ -30,9 +30,9 @@ from emd_falsify import Bemd, make_empirical_risk
 
 # Load data into `data`
 # Define `modelA`, `modelB`
-# Define `lossA`, `lossB`
-# Define `Lsynth: int`
-# Define `c: int`
+# Define `lossA`, `lossB` : functions
+# Define `Lsynth` : int
+# Define `c` : float
 
 synth_ppfA = make_empirical_risk(lossA(modelA.generate(Lsynth)))
 synth_ppfB = make_empirical_risk(lossB(modelB.generate(Lsynth)))
@@ -46,7 +46,8 @@ However we also expose additional functions like the lower-level `draw_R_samples
 These may be more verbose, but especially for cases with multiple models to compare,
 they may be more convenient.
 
-We also provide `emd_falsify.tasks.Calibrate` to help run calibration experiments.
+Note that comparisons depend on choosing an appropriate value for `c`; a systematic way to do this is via a *calibration experiment*, as described in our publication.
+This package provides `emd_falsify.tasks.Calibrate` to help run calibration experiments.
 
 ### Complete usage examples
 

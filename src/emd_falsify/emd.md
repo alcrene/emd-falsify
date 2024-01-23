@@ -32,7 +32,7 @@ math:
 (supp_emd-implementation)=
 # EMD implementation
 
-```{code-cell}
+```{code-cell} ipython3
 ---
 editable: true
 slideshow:
@@ -65,7 +65,7 @@ config = Config()
 logger = logging.getLogger(__name__)
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 __all__ = ["interp1d", "make_empirical_risk_ppf", "draw_R_samples", "Bemd"]
 ```
 
@@ -73,7 +73,7 @@ __all__ = ["interp1d", "make_empirical_risk_ppf", "draw_R_samples", "Bemd"]
 
 Notebook only imports
 
-```{code-cell}
+```{code-cell} ipython3
 ---
 editable: true
 slideshow:
@@ -87,7 +87,7 @@ logging.basicConfig(level=logging.WARNING)
 logger.setLevel(logging.ERROR)
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 ---
 editable: true
 slideshow:
@@ -109,7 +109,7 @@ $$\begin{aligned}
 
 The upper part of the yellow region is never sampled, because monotonicity prevents paths from exceeding $\log 1$ at any point. The constant $c$ is determined by a calibration experiment, and controls the variability of paths. Here we use $c=1$.
 
-```{code-cell}
+```{code-cell} ipython3
 ---
 editable: true
 slideshow:
@@ -154,7 +154,7 @@ $$\begin{aligned}
 \tilde{\l} &= \log Φ\,, & Φ &\in [0, 1]
 \end{aligned}$$
 
-```{code-cell}
+```{code-cell} ipython3
 ---
 editable: true
 slideshow:
@@ -195,7 +195,7 @@ Our [workflow tasks](./tasks.py) require arguments to be serializable, which inc
 
 We could define a custom version of `interp1d` (in fact we do) which adds serializability within our framework. However this would be bad form, requiring users to use special classes for seemingly obscure reasons. So instead we make the original class in `scipy.interpolate` serializable, following the format described in [*Defining serializers for preexisting types*](https://scityping.readthedocs.io/en/stable/defining-serializers.html) from the *scityping* documentation. In the process this does define a custom `interp1d` type, but in practice either this one or the standard one from `scipy.interpolate` can be used interchangeably.
 
-```{code-cell}
+```{code-cell} ipython3
 ---
 editable: true
 slideshow:
@@ -245,7 +245,7 @@ In some cases it may be possible to derive $q$ analytically from a models equati
 
 If users want to use different assumptions – for example if users know that the highest possible risk is part of the sample set – then they may construct the `scipy.interpolate.interp1d` object directly.
 
-```{code-cell}
+```{code-cell} ipython3
 ---
 editable: true
 slideshow:
@@ -320,12 +320,11 @@ The rule for computing `new_M` comes from the following ($ε$: `stderr`, $ε_t$:
 ```
 :::
 
-```{code-cell}
+```{code-cell} ipython3
 ---
 editable: true
 slideshow:
   slide_type: ''
-tags: [remove-cell]
 ---
 @memoize(ignore=["path_progbar"])
 def draw_R_samples(mixed_risk_ppf: Callable,
@@ -483,7 +482,7 @@ In this example, neither model $A$ nor $B$ is a perfect fit to the data, since t
 
 Within the EMD framework, models are compared as usual based on their expected risk $R$. This captures aleatoric uncertainty – i.e. randomness inherent to the model, such as the $ξ$ process above. The EMD criterion then further captures *epistemic* uncertainty by treating $R$ as a random variable, and considering *its* distribution. Roughly speaking, the better a model is at predicting the data distribution, the tighter its $R$ distribution will be. (For example, a model can have a lot of noise, but if we can predict the statistics of that noise accurately, then the distribution on $R$ will be tight and its uncertainty low.)
 
-```{code-cell}
+```{code-cell} ipython3
 ---
 editable: true
 slideshow:
@@ -541,7 +540,7 @@ In this example, the discrepancy between the theoretical models and the observed
 - **Synthetic** PPF — Same theoretical model for both the defining the risk and generating the (synthetic) data.
 - **Mixed** PPF – Different models for the risk and data: Again a theoretical model is used to define the risk, but now it is evaluated on real observed data.
 
-```{code-cell}
+```{code-cell} ipython3
 ---
 editable: true
 slideshow:
@@ -562,7 +561,7 @@ panel_data.opts(
 )
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 ---
 editable: true
 slideshow:
@@ -593,7 +592,7 @@ layout.opts(
 )
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 ---
 editable: true
 slideshow:
@@ -621,7 +620,7 @@ The figures below show the sampled values for $R_A$ and $R_B$, along overlayed w
 
 In this case both distributions are very tight, and any difference between them are due as much to finite sampling than to the likelihood picking up which one is the better fit. This translates into distributions with very high overlap, and therefore a probability approximately ½ that model $A$ is better than $B$. In other words, the criterion is *equivocal* between $A$ and $B$, as we expected.
 
-```{code-cell}
+```{code-cell} ipython3
 ---
 editable: true
 slideshow:
@@ -667,7 +666,7 @@ We can write the sum as nested Python loops:
 (`RA_lst` and `RB_lst` are the expected risk samples generated in the example above.)
 :::
 
-```{code-cell}
+```{code-cell} ipython3
 ---
 editable: true
 slideshow:
@@ -685,7 +684,7 @@ s / len(RA_lst) / len(RB_lst)
 
 However it is much faster (about 50x in this case) to use a NumPy ufunc:
 
-```{code-cell}
+```{code-cell} ipython3
 ---
 editable: true
 slideshow:
@@ -699,7 +698,7 @@ np.less.outer(RA_lst, RB_lst).mean()
 
 The `Bemd` function is essentially a convenience function for comparing two models, which calls `draw_R_samples` (once for each models) and then computes the criterion value as above.
 
-```{code-cell}
+```{code-cell} ipython3
 ---
 editable: true
 slideshow:
@@ -712,7 +711,7 @@ def mp_wrapper(f: Callable, *args, out: "mp.queues.Queue", **kwargs):
 LazyPartial = Union[Callable, Tuple[Callable, Mapping]]
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 ---
 editable: true
 slideshow:
@@ -870,7 +869,7 @@ def Bemd(mixed_risk_ppfA: Callable, mixed_risk_ppfB: Callable,
 
 Calling `Bemd` returns the same value as above, up to sampling error:
 
-```{code-cell}
+```{code-cell} ipython3
 ---
 editable: true
 slideshow:
@@ -880,7 +879,7 @@ tags: [active-ipynb]
 Bemd(mixed_ppfA, mixed_ppfB, synth_ppfA, synth_ppfB, c=1)
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 ---
 editable: true
 slideshow:

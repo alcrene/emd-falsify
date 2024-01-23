@@ -35,7 +35,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install .
+          pip install .[doc]
 
       # Build the book
       - name: Build the book

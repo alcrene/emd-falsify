@@ -155,7 +155,7 @@ logger = logging.getLogger(__name__)
 # Recall that we made the assumption that the variability of the path process $\pathP$ should determined by $δ^{\EMD}$, up to some constant $c$.{cite:p}`reneFalsifyingModels2024` This constant is determined by a calibration experiment.
 # To keep expressions concise, in this section we use $\emdstd(Φ) := c δ^{\EMD}(Φ)$.
 # :::
-# To draw an increment $Δ l_{2^{-n}}$, we need to convert $\lnLtt(Φ)$ and $\emdstd(Φ) := c δ^{\EMD}(Φ)$ into beta distribution parameters $α$ and $β$. If $x_1$ follows a beta distribution, then its first two cumulants are given by
+# To draw an increment $Δ l_{2^{-n}}$, we need to convert $\lnLtt(Φ)$ and $\emdstd(Φ) := \sqrt{c}\, δ^{\EMD}(Φ)$ into beta distribution parameters $α$ and $β$. If $x_1$ follows a beta distribution, then its first two cumulants are given by
 # ```{math}
 # \begin{aligned}
 # x_1 &\sim \Beta(α, β) \,, \\
