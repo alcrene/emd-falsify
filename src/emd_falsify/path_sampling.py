@@ -9,9 +9,9 @@
 #       format_name: percent
 #       format_version: '1.3'
 #   kernelspec:
-#     display_name: Python (emd-paper)
+#     display_name: Python (emd-falsify-dev)
 #     language: python
-#     name: emd-paper
+#     name: emd-falsify-dev
 # ---
 
 # %% [markdown] tags=["remove-cell"] editable=true slideshow={"slide_type": ""}

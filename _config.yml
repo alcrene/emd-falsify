@@ -75,7 +75,7 @@ html:
 
 sphinx:
   config:
-    mathjax_config:
+    mathjax3_config:
       # The `mtext` font is used for non-math symbols, like the content of `\text` commands.
       # By inheriting this font, we ensure that textual elements in equations use the same font
       # as the main text of our book. Otherwise text is rendered in the TeX Serif font, which looks out of place on a web page with sans serif.
