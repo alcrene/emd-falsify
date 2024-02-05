@@ -10,7 +10,7 @@ author                      : Alexandre René  # The author of the book
 copyright                   : "2023"  # Copyright year to be placed in the footer
 logo                        : ""  # A path to the book logo
 exclude_patterns            : [_build, Thumbs.db, .DS_Store, "**.ipynb_checkpoints", ".*", "**.egg-info", "*.mypy_cache", "**__pycache__", "**/.pytest_cache",
-                               ".jupyter", ".jupyter_cache",
+                               ".jupyter", ".jupyter_cache", "build/**",
                                "**purgatory", "**.smt"]
 
 # Force re-execution of notebooks on each build.

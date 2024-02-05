@@ -17,7 +17,7 @@ kernelspec:
 
 # Configuration options
 
-```{code-cell}
+```{code-cell} ipython3
 ---
 editable: true
 slideshow:
@@ -30,7 +30,7 @@ from typing import Optional, ClassVar, Union, Literal, Dict
 from configparser import ConfigParser
 ```
 
-```{code-cell}
+```{code-cell} ipython3
 ---
 editable: true
 slideshow:
@@ -38,9 +38,6 @@ slideshow:
 tags: [hide-input]
 ---
 from pydantic import BaseModel, Field, validator, root_validator
-# from mackelab_toolbox.config import ValidatingConfig, prepend_rootdir, ensure_dir_exists
-# from mackelab_toolbox.config.holoviews import FiguresConfig
-    # prepend_rootdir is a workaround because assigning automatically doesn’t currently work
 from valconfig import ValConfig, ensure_dir_exists
 from valconfig.contrib.holoviews import FiguresConfig, HoloMPLConfig, HoloBokehConfig, GenericParam
 from scityping import Config as ScitypingConfig
@@ -52,12 +49,14 @@ Possible improvement: If we could have nested config parsers, we might be
     In particular, the `colors` field could remain a config parser, although
     we would still want to allow dotted access.
 
-```{code-cell}
+```{code-cell} ipython3
 class Config(ValConfig):
     __default_config_path__   = "defaults.cfg"
 
     class paths:
         figures : Path
+
+        ensure_dir_exists = validator('figures', allow_reuse=True)(ensure_dir_exists)
 
     class mp:
         max_cores: int
@@ -131,7 +130,7 @@ class Config(ValConfig):
 config = Config(Path(__file__).parent/"defaults.cfg",
                 config_module_name=__name__)
 
-```{code-cell}
+```{code-cell} ipython3
 ---
 editable: true
 slideshow:

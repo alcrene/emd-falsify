@@ -549,7 +549,7 @@ def draw_R_samples(mixed_risk_ppf: Callable,
 #     hv.opts.Layout(sublabel_format="")
 # )
 
-# %% editable=true slideshow={"slide_type": ""} tags=["active-ipynb"]
+# %% [markdown] editable=true slideshow={"slide_type": ""}
 # (supp_emd-implementation_Bemd)=
 # ## Implementation of $B^{\mathrm{emd}}_{AB;c}$
 

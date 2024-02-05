@@ -649,7 +649,7 @@ fig.opts(
 )
 ```
 
-+++ {"editable": true, "slideshow": {"slide_type": ""}, "tags": ["active-ipynb"]}
++++ {"editable": true, "slideshow": {"slide_type": ""}}
 
 (supp_emd-implementation_Bemd)=
 ## Implementation of $B^{\mathrm{emd}}_{AB;c}$

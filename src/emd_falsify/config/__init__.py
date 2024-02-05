@@ -25,9 +25,6 @@ from configparser import ConfigParser
 
 # %% editable=true slideshow={"slide_type": ""} tags=["hide-input"]
 from pydantic import BaseModel, Field, validator, root_validator
-# from mackelab_toolbox.config import ValidatingConfig, prepend_rootdir, ensure_dir_exists
-# from mackelab_toolbox.config.holoviews import FiguresConfig
-    # prepend_rootdir is a workaround because assigning automatically doesn’t currently work
 from valconfig import ValConfig, ensure_dir_exists
 from valconfig.contrib.holoviews import FiguresConfig, HoloMPLConfig, HoloBokehConfig, GenericParam
 from scityping import Config as ScitypingConfig
@@ -46,6 +43,8 @@ class Config(ValConfig):
 
     class paths:
         figures : Path
+
+        ensure_dir_exists = validator('figures', allow_reuse=True)(ensure_dir_exists)
 
     class mp:
         max_cores: int

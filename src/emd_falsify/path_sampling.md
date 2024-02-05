@@ -127,22 +127,22 @@ Because the joint requirements of monotonicity, non-stationarity and $Φ$-symmet
 Moreover, instead of drawing quantile values, we draw increments
 ```{math}
 :label: eq_def-quantile-increment
-Δ l_{ΔΦ}(Φ) := \lnLh(Φ+ΔΦ) - \lnLh(Φ) \,.
+Δ q_{ΔΦ}(Φ) := \lnLh(Φ+ΔΦ) - \lnLh(Φ) \,.
 ```
-Given two initial end points $\lnLh(0)$ and $\lnLh(1)$, we therefore first we draw the pair $\bigl\{Δ l_{2^{-1}}(0),\; Δ l_{2^{-1}}\bigl(2^{-1}\bigr)\}$, which gives us
+Given two initial end points $\lnLh(0)$ and $\lnLh(1)$, we therefore first we draw the pair $\bigl\{Δ q_{2^{-1}}(0),\; Δ q_{2^{-1}}\bigl(2^{-1}\bigr)\}$, which gives us
 ```{math}
-\lnLh\bigl(2^{-1}\bigr) = \lnLh(0) + Δ l_{2^{-1}}(0) = \lnLh(1) - Δ l_{2^{-1}}\bigl(2^{-1}\bigr)\,.
+\lnLh\bigl(2^{-1}\bigr) = \lnLh(0) + Δ q_{2^{-1}}(0) = \lnLh(1) - Δ q_{2^{-1}}\bigl(2^{-1}\bigr)\,.
 ```
-Then $\bigl\{\lnLh(0), \lnLh\bigl(\frac{1}{2}\bigr) \bigr\}$ and $\bigl\{ \lnLh\bigl(\frac{1}{2}\bigr), \lnLh(1) \bigr\}$ serve as end points to draw $\bigl\{Δ l_{2^{-2}}\bigl(0\bigr),\; Δ l_{2^{-2}}\bigl(2^{-2}\bigr) \bigr\}$ and $\bigl\{Δ l_{2^{-2}}\bigl(2^{-1}\bigr),\; Δ l_{2^{-2}}\bigl(2^{-1} + 2^{-2}\bigr) \bigr\}$. We repeat the procedure as needed, sampling smaller and smaller incremenents, until the path has the desired resolution. As the increments are constrained:
+Then $\bigl\{\lnLh(0), \lnLh\bigl(\frac{1}{2}\bigr) \bigr\}$ and $\bigl\{ \lnLh\bigl(\frac{1}{2}\bigr), \lnLh(1) \bigr\}$ serve as end points to draw $\bigl\{Δ q_{2^{-2}}\bigl(0\bigr),\; Δ q_{2^{-2}}\bigl(2^{-2}\bigr) \bigr\}$ and $\bigl\{Δ q_{2^{-2}}\bigl(2^{-1}\bigr),\; Δ q_{2^{-2}}\bigl(2^{-1} + 2^{-2}\bigr) \bigr\}$. We repeat the procedure as needed, sampling smaller and smaller incremenents, until the path has the desired resolution. As the increments are constrained:
 ```{math}
-Δ l_{2^{-n}}(Φ) \in \bigl( 0, \lnLh(Φ+2^{-n+1}) - \lnLh(Φ)\,\bigr)\,,
+Δ q_{2^{-n}}(Φ) \in \bigl( 0, \lnLh(Φ+2^{-n+1}) - \lnLh(Φ)\,\bigr)\,,
 ```
 the path thus sampled is always monotone. Note also that increments must be drawn in pairs (or more generally as a *combination*) of values constrained by their sum:
 ```{math}
 :label: eq_sum-constraint
-Δ l_{2^{-n}}\bigl(Φ\bigr) + Δ l_{2^{-n}}\bigl(Φ + 2^{-n} \bigr) \stackrel{!}{=} \lnLh(Φ+2^{-n+1}) - \lnLh(Φ) \,.
+Δ q_{2^{-n}}\bigl(Φ\bigr) + Δ q_{2^{-n}}\bigl(Φ + 2^{-n} \bigr) \stackrel{!}{=} \lnLh(Φ+2^{-n+1}) - \lnLh(Φ) \,.
 ```
-The possible increments therefore lie on a 1-simplex, for which a natural choice is to use a beta distribution[^1], with the random variable corresponding to the first increment $Δ l_{2^{-n}}(Φ)$. The density function of a beta random variable has the form
+The possible increments therefore lie on a 1-simplex, for which a natural choice is to use a beta distribution[^1], with the random variable corresponding to the first increment $Δ q_{2^{-n}}(Φ)$. The density function of a beta random variable has the form
 ```{math}
 :label: eq_beta-pdf
 p(x_1) \propto x^{α-1} (1-x)^{β-1}\,,
@@ -180,7 +180,7 @@ Satisfying this requirement is required in order to compute integrals over $\lnL
 Recall that we made the assumption that the variability of the path process $\pathP$ should determined by $δ^{\EMD}$, up to some constant $c$.{cite:p}`reneFalsifyingModels2024` This constant is determined by a calibration experiment.
 To keep expressions concise, in this section we use $\emdstd(Φ) := c δ^{\EMD}(Φ)$.
 :::
-To draw an increment $Δ l_{2^{-n}}$, we need to convert $\lnLtt(Φ)$ and $\emdstd(Φ)$ into beta distribution parameters $α$ and $β$. If $x_1$ follows a beta distribution, then its first two cumulants are given by
+To draw an increment $Δ q_{2^{-n}}$, we need to convert $\lnLtt(Φ)$ and $\emdstd(Φ)$ into beta distribution parameters $α$ and $β$. If $x_1$ follows a beta distribution, then its first two cumulants are given by
 ```{math}
 \begin{aligned}
 x_1 &\sim \Beta(α, β) \,, \\
@@ -205,15 +205,15 @@ Here $ψ$ and $ψ_1$ are the digamma and trigamma functions respectively.
 Since we want the sum to be $d := \lnLh(Φ+2^{-n+1}) - \lnLh(Φ)$, we define
 ```{math}
 :label: eq_relation-beta-increment
-\bigl[Δ l_{2^{-n}}\bigl(Φ\bigr),\, Δ l_{2^{-n}}\bigl(Φ+2^{-n})\bigr)\bigr] = d \bigl[x_1, x_2\bigr] \,.
+\bigl[Δ q_{2^{-n}}\bigl(Φ\bigr),\, Δ q_{2^{-n}}\bigl(Φ+2^{-n})\bigr)\bigr] = d \bigl[x_1, x_2\bigr] \,.
 ```
 Then
 
 +++
 
 $$\begin{aligned}
-\EE_a\Bigl[\bigl[Δ l_{2^{-n}}\bigl(Φ\bigr),\, Δ l_{2^{-n}}\bigl(Φ+2^{-n}\bigr)\bigr]\Bigr] &= \frac{d}{e^{ψ(α)} + e^{ψ(β)}} \bigl[e^{ψ(α)}, e^{ψ(β)}\bigr] \,, \\
-\Mvar\Bigl[\bigl[Δ l_{2^{-n}}\bigl(Φ\bigr),\, Δ l_{2^{-n}}\bigl(Φ+2^{-n}\bigr)\bigr]\Bigr] &= \frac{1}{2} \bigl(ψ_1(α) + ψ_1(β)\bigr) \,.
+\EE_a\Bigl[\bigl[Δ q_{2^{-n}}\bigl(Φ\bigr),\, Δ q_{2^{-n}}\bigl(Φ+2^{-n}\bigr)\bigr]\Bigr] &= \frac{d}{e^{ψ(α)} + e^{ψ(β)}} \bigl[e^{ψ(α)}, e^{ψ(β)}\bigr] \,, \\
+\Mvar\Bigl[\bigl[Δ q_{2^{-n}}\bigl(Φ\bigr),\, Δ q_{2^{-n}}\bigl(Φ+2^{-n}\bigr)\bigr]\Bigr] &= \frac{1}{2} \bigl(ψ_1(α) + ψ_1(β)\bigr) \,.
 \end{aligned}$$
 
 +++
@@ -223,8 +223,8 @@ We now choose to define the parameters $α$ and $β$ via the following relations
 :class: important
 
 $$\begin{aligned}
-\EE_a\Bigl[\bigl[Δ l_{2^{-n}}\bigl(Φ\bigr),\, Δ l_{2^{-n}}\bigl(Φ+2^{-n}\bigr)\bigr]\Bigr] &\stackrel{!}{=}^* \bigl[\, \lnLtt\bigl(Φ+2^{-n}\bigr) - \lnLtt\bigl(Φ\bigr),\,\lnLtt\bigl(Φ+2^{-n+1}\bigr) - \lnLtt\bigl(Φ+2^{-n}\bigr) \,\bigr]\,, \\
-\Mvar\Bigl[\bigl[Δ l_{2^{-n}}\bigl(Φ\bigr),\, Δ l_{2^{-n}}\bigl(Φ+2^{-n}\bigr)\bigr]\Bigr] &\stackrel{!}{=} \emdstd\bigl(Φ+2^{-n}\bigr)^2 \,.
+\EE_a\Bigl[\bigl[Δ q_{2^{-n}}\bigl(Φ\bigr),\, Δ q_{2^{-n}}\bigl(Φ+2^{-n}\bigr)\bigr]\Bigr] &\stackrel{!}{=}^* \bigl[\, \lnLtt\bigl(Φ+2^{-n}\bigr) - \lnLtt\bigl(Φ\bigr),\,\lnLtt\bigl(Φ+2^{-n+1}\bigr) - \lnLtt\bigl(Φ+2^{-n}\bigr) \,\bigr]\,, \\
+\Mvar\Bigl[\bigl[Δ q_{2^{-n}}\bigl(Φ\bigr),\, Δ q_{2^{-n}}\bigl(Φ+2^{-n}\bigr)\bigr]\Bigr] &\stackrel{!}{=} \emdstd\bigl(Φ+2^{-n}\bigr)^2 \,.
 \end{aligned}$$ (eq_defining-conditions-a)
 :::
 
@@ -236,7 +236,7 @@ We use $=^*$ to indicate equality in spirit rather than true equality, since str
 :::{admonition} &nbsp;
 :class: important
 
-$$\frac{\EE_a\bigl[Δ l_{2^{-n}}\bigl(Φ\bigr)\bigr]}{\EE_a \bigl[Δ l_{2^{-n}}\bigl(Φ+2^{-n}\bigr)\bigr]} \stackrel{!}{=} \frac{\lnLtt\bigl(Φ+2^{-n}\bigr) - \lnLtt\bigl(Φ\bigr)}{\lnLtt\bigl(Φ+2^{-n+1}\bigr) - \lnLtt\bigl(Φ+2^{-n}\bigr)} \,.$$ (eq_defining_conditions-b)
+$$\frac{\EE_a\bigl[Δ q_{2^{-n}}\bigl(Φ\bigr)\bigr]}{\EE_a \bigl[Δ q_{2^{-n}}\bigl(Φ+2^{-n}\bigr)\bigr]} \stackrel{!}{=} \frac{\lnLtt\bigl(Φ+2^{-n}\bigr) - \lnLtt\bigl(Φ\bigr)}{\lnLtt\bigl(Φ+2^{-n+1}\bigr) - \lnLtt\bigl(Φ+2^{-n}\bigr)} \,.$$ (eq_defining_conditions-b)
 :::
 
 +++
@@ -248,13 +248,13 @@ $$\frac{\EE_a\bigl[Δ l_{2^{-n}}\bigl(Φ\bigr)\bigr]}{\EE_a \bigl[Δ l_{2^{-n}}\
   ```
 - The stochastic process is not Markovian, so successive increments are not independent. The variance of a larger increment therefore need not equal the sum of the variance of constituent smaller ones; in other words,
   ```{math}
-  Δ l_{2^{-n+1}}\bigl(Φ\bigr) = Δ l_{2^{-n}}\bigl(Φ\bigr) + Δ l_{2^{-n}}\bigl(Φ+2^{-n}\bigr)
+  Δ q_{2^{-n+1}}\bigl(Φ\bigr) = Δ q_{2^{-n}}\bigl(Φ\bigr) + Δ q_{2^{-n}}\bigl(Φ+2^{-n}\bigr)
   ```
   does *not* imply
   ```{math}
-  \VV\bigl[Δ l_{2^{-n+1}}\bigl(Φ\bigr)\bigr] = \VV\bigl[Δ l_{2^{-n}}\bigl(Φ\bigr)\bigr] + \VV\bigl[Δ l_{2^{-n}}\bigl(Φ+2^{-n}\bigr)\bigr]\,.
+  \VV\bigl[Δ q_{2^{-n+1}}\bigl(Φ\bigr)\bigr] = \VV\bigl[Δ q_{2^{-n}}\bigl(Φ\bigr)\bigr] + \VV\bigl[Δ q_{2^{-n}}\bigl(Φ+2^{-n}\bigr)\bigr]\,.
   ```
-- Our defining equations make equivalent use of the pre ($Δ l_{2^{-n}}(Φ)$) and post ($Δ l_{2^{-n}}(Φ+2^{-n})$) increments, thus preserving symmetry in $Φ$.
+- Our defining equations make equivalent use of the pre ($Δ q_{2^{-n}}(Φ)$) and post ($Δ q_{2^{-n}}(Φ+2^{-n})$) increments, thus preserving symmetry in $Φ$.
 - Step sizes of the form $2^{-n}$ have exact representations in binary. Thus even small step sizes should not introduce additional numerical errors.
 
 +++
@@ -273,7 +273,7 @@ r &:= \frac{\lnLtt(Φ+2^{-n}) - \lnLtt(Φ)}{\lnLtt(Φ+2^{-n+1}) - \lnLtt(Φ+2^{-
 v &:= 2 \emdstd\bigl(Φ + 2^{-n}\bigr)^2 \,.
 \end{align}$$ (eq_def-r-v) 
 :::
-The first value, $r$, is the ratio of two subincrements within $Δ l_{2^{-n+1}}(Φ)$.
+The first value, $r$, is the ratio of two subincrements within $Δ q_{2^{-n+1}}(Φ)$.
 Setting $\frac{e^{ψ(α)}}{e^{ψ(β)}} = r$, the two equations we need to solve for $α$ and $β$ can be written
 ```{math}
 :label: eq_root-finding-problem
@@ -447,11 +447,11 @@ For extreme values of $r$ or $v$, the beta distribution becomes degenerate and n
 $\boldsymbol{r \to 0}$
 ^^^
 
-The corresponds to stating that $Δ l_{2^{-n}}(Φ)$ is infinitely smaller than $Δ l_{2^{-n}}(Φ+2^{-n})$. Thus we set $x_1 = 1$, which is equivalent to setting
+The corresponds to stating that $Δ q_{2^{-n}}(Φ)$ is infinitely smaller than $Δ q_{2^{-n}}(Φ+2^{-n})$. Thus we set $x_1 = 1$, which is equivalent to setting
 
 $$\begin{aligned}
-Δ l_{2^{-n}}(Φ) &= 0 \,, \\
-Δ l_{2^{-n}}(Φ+2^{-n}) &= \lnLtt(Φ+2^{-n+1}) - \lnLtt(Φ) \,.
+Δ q_{2^{-n}}(Φ) &= 0 \,, \\
+Δ q_{2^{-n}}(Φ+2^{-n}) &= \lnLtt(Φ+2^{-n+1}) - \lnLtt(Φ) \,.
 \end{aligned}$$
 
 :::
@@ -462,7 +462,7 @@ $$\begin{aligned}
 $\boldsymbol{r \to \infty}$
 ^^^
 
-The converse of the previous case: $Δ l_{2^{-n}}(Φ)$ is infinitely larger than $Δ l_{2^{-n}}(Φ+2^{-n})$. We set $x_1 = 0$.
+The converse of the previous case: $Δ q_{2^{-n}}(Φ)$ is infinitely larger than $Δ q_{2^{-n}}(Φ+2^{-n})$. We set $x_1 = 0$.
 
 :::
 
