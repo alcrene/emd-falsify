@@ -98,11 +98,12 @@ sphinx:
           "Me"    : "\\mathcal{M}^ε"
           "Philt" : ["\\widetilde{Φ}_{|#1}", 1]
           "Bemd"  : ["B_{#1}^{\\mathrm{EMD}}", 1]
+          "Bconf" : ["B^{\\mathrm{conf}}_{#1}", 1]
           # path_sampling.md
-          "lnLtt": "{\\tilde{l}}"
+          "lnLtt": "{q^*}"
           "Mvar" : "{\\mathop{\\mathrm{Mvar}}}"
-          "pathP": "{\\mathop{\\mathcal{P}}}"
-          "lnLh" : "{\\hat{l}}"
-          "emdstd": "{\\tilde{σ}}"
+          "pathP": "{\\mathop{\\mathfrak{Q}}}"
+          "lnLh" : "{\\hat{q}}"
+          "emdstd": "{\\sqrt{c} δ^{\\mathrm{EMD}}}"
           "EMD"  : "{\\mathrm{EMD}}"
 

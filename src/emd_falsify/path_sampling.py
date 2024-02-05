@@ -17,15 +17,15 @@
 # %% [markdown] tags=["remove-cell"] editable=true slideshow={"slide_type": ""}
 # ---
 # math:
-#   '\lnLtt': '{\tilde{l}}'
+#   '\lnLtt': '{q^*}'
 #   '\EE'   : '{\mathbb{E}}'
 #   '\VV'   : '{\mathbb{V}}'
 #   '\nN'   : '{\mathcal{N}}'
 #   '\Mvar' : '{\mathop{\mathrm{Mvar}}}'
 #   '\Beta' : '{\mathop{\mathrm{Beta}}}'
-#   '\pathP': '{\mathop{\mathcal{P}}}'
-#   '\lnLh' : '{\hat{l}}'
-#   '\emdstd': '{\tilde{σ}}'
+#   '\pathP': '{\mathop{\mathfrak{Q}}}'
+#   '\lnLh' : '{\hat{q}}'
+#   '\emdstd': '{\sqrt{c} δ^{\mathrm{EMD}}}'
 #   '\EMD'  : '{\mathrm{EMD}}'
 # ---
 
@@ -36,11 +36,6 @@
 # %% [markdown] editable=true slideshow={"slide_type": ""}
 # ```{only} html
 # {{ prolog }}
-# %{{ startpreamble }}
-# %{{ endpreamble }}
-#
-# $\renewcommand{\lnLh}[1][]{\hat{l}_{#1}}
-# \renewcommand{\emdstd}[1][]{\tilde{σ}_{{#1}}}$
 # ```
 
 # %% editable=true slideshow={"slide_type": ""} tags=["active-ipynb", "remove-cell"]
@@ -86,6 +81,9 @@ from emd_falsify.digitize import digitize  # Used to improve numerical stability
 # %% tags=["remove-cell"]
 logger = logging.getLogger(__name__)
 
+# %%
+__all__ = ["generate_quantile_paths", "generate_path_hierarchical_beta"]
+
 
 # %% [markdown]
 # We want to generate paths $\lnLh$ for the quantile function $l(Φ)$, with $Φ \in [0, 1]$, from a stochastic process $\pathP$ determined by $\lnLtt(Φ)$ and $\emdstd(Φ)$. This process must satisfy the following requirements:
@@ -97,7 +95,7 @@ logger = logging.getLogger(__name__)
 #   + Concretely, we require the process to be “$Φ$-symmetric”: replacing $\lnLtt(Φ) \to \lnLtt(-Φ)$ and $\emdstd(Φ) \to \emdstd(-Φ)$ should define the same process, just inverted along the $Φ$ axis.
 
 # %% [markdown]
-# (supp_path-sampling_hierarchical-beta)=
+# (code_path-sampling_hierarchical-beta)=
 # ## Hierarchical beta process
 
 # %% [markdown]
@@ -141,7 +139,7 @@ logger = logging.getLogger(__name__)
 # ```
 # with $ε$ vanishing as $n$ is increased to infinity.
 #
-# We have found that failure to satisfy this requirement leads to unsatisfactory sampling of quantile paths. In particular, naive procedures tend to perform worse as $ΔΦ$ is reduced, making accurate integration impossible.
+# Satisfying this requirement is required in order to compute integrals over $\lnLh$, since otherwise they don’t converge as $ΔΦ$ is reduced.
 # :::
 
 # %% [markdown]
@@ -155,7 +153,7 @@ logger = logging.getLogger(__name__)
 # Recall that we made the assumption that the variability of the path process $\pathP$ should determined by $δ^{\EMD}$, up to some constant $c$.{cite:p}`reneFalsifyingModels2024` This constant is determined by a calibration experiment.
 # To keep expressions concise, in this section we use $\emdstd(Φ) := c δ^{\EMD}(Φ)$.
 # :::
-# To draw an increment $Δ l_{2^{-n}}$, we need to convert $\lnLtt(Φ)$ and $\emdstd(Φ) := \sqrt{c}\, δ^{\EMD}(Φ)$ into beta distribution parameters $α$ and $β$. If $x_1$ follows a beta distribution, then its first two cumulants are given by
+# To draw an increment $Δ l_{2^{-n}}$, we need to convert $\lnLtt(Φ)$ and $\emdstd(Φ)$ into beta distribution parameters $α$ and $β$. If $x_1$ follows a beta distribution, then its first two cumulants are given by
 # ```{math}
 # \begin{aligned}
 # x_1 &\sim \Beta(α, β) \,, \\
@@ -349,11 +347,15 @@ def f_mid(lnα, v, _exp=np.exp, _log=np.log, polygamma=scipy.special.polygamma):
 # :::
 
 # %% [markdown]
-# Plotting the eigenvalues of the Jacobian (specifically, the real part of its dominant eigenvalue) in fact highlights three regions with a center at roughly $(\ln α, \ln β) = (0, 0)$. (The Jacobian does not depend on $r$ or $v$, so this is true for all fit conditions). Empirically we found that initializing fits at $(0, 0)$ resulted in robust fits for a large number of $(r,v)$ tuples, even when $r > 100$. We hypothesize that this is because it is difficult for the fit to move from one region to another; by initializing where the Jacobian is small, fits are able to find the desired values before getting stuck in the wrong region.
+# Plotting the eigenvalues of the Jacobian (specifically, the real part of its dominant eigenvalue) in fact highlights three regions with a center at roughly $(\ln α, \ln β) = (0, 0)$. (The Jacobian does not depend on $r$ or $v$, so this is true for all fit conditions). 
 #
 # Note that the color scale is clipped, to better resolve values near zero. Eigenvalues quickly increase by multiple orders of magnitude away from $(0,0)$.
 #
-# It turns out that the only region where $(0, 0)$ is *not* a good initial vector for the root solver is when $\boldsymbol{r \approx 1}$. This can be resolved by choosing a better initial value along the $(α_0, α_0)$ diagonal, as described above. In practice we found no detriment to always using the 1d problem to select an initial vector, so we use that approach in all cases.
+# :::{note}
+# Empirically we found that initializing fits at $(0, 0)$ resulted in robust fits for a large number of $(r,v)$ tuples, even when $r > 100$. We hypothesize that this is because it is difficult for the fit to move from one region to another; by initializing where the Jacobian is small, fits are able to find the desired values before getting stuck in the wrong region.
+#
+# That being said, there are cases where $(0, 0)$ is not a good initial vector for the root solver is when $\boldsymbol{r \approx 1}$. This can be resolved by choosing a better initial value along the $(α_0, α_0)$ diagonal, as described above. In practice we found no detriment to always using the 1d problem to select an initial vector, so we use that approach in all cases.
+# :::
 
 # %% tags=["active-ipynb", "hide-input"]
 # fig = hv.QuadMesh((np.log(α.flat), np.log(β.flat), domλ),
@@ -381,15 +383,15 @@ def f_mid(lnα, v, _exp=np.exp, _log=np.log, polygamma=scipy.special.polygamma):
 # (supp_path-sampling_beta-param-special-cases)=
 # ### Special cases for extreme values
 #
-# For extreme values of $r$ or $v$, the beta distribution becomes degenerate and numerical optimization may break. We identify four cases requiring special treatment.
+# For extreme values of $r$ or $v$, the beta distribution becomes degenerate and numerical optimization may break. We identified four cases requiring special treatment.
 #
-# :::::{div} full-width
-# ::::{grid} 1 2 3 4
+# ::::{grid} 1 2 3 3
 # :gutter: 3
 #
 # :::{grid-item-card}
+# :columns: 12 8 8 8
 #
-# $\boldsymbol{r = 0}$
+# $\boldsymbol{r \to 0}$
 # ^^^
 #
 # The corresponds to stating that $Δ l_{2^{-n}}(Φ)$ is infinitely smaller than $Δ l_{2^{-n}}(Φ+2^{-n})$. Thus we set $x_1 = 1$, which is equivalent to setting
@@ -402,8 +404,9 @@ def f_mid(lnα, v, _exp=np.exp, _log=np.log, polygamma=scipy.special.polygamma):
 # :::
 #
 # :::{grid-item-card}
+# :columns: 12 4 4 4
 #
-# $\boldsymbol{r = 0}$
+# $\boldsymbol{r \to \infty}$
 # ^^^
 #
 # The converse of the previous case: $Δ l_{2^{-n}}(Φ)$ is infinitely larger than $Δ l_{2^{-n}}(Φ+2^{-n})$. We set $x_1 = 0$.
@@ -411,6 +414,7 @@ def f_mid(lnα, v, _exp=np.exp, _log=np.log, polygamma=scipy.special.polygamma):
 # :::
 #
 # :::{grid-item-card}
+# :columns: 12 12 12 12
 #
 # $\boldsymbol{v \to 0}$
 # ^^^
@@ -421,6 +425,7 @@ def f_mid(lnα, v, _exp=np.exp, _log=np.log, polygamma=scipy.special.polygamma):
 # :::
 #
 # :::{grid-item-card}
+# :columns: 12
 #
 # $\boldsymbol{v \to \infty}$
 # ^^^
@@ -446,7 +451,6 @@ def f_mid(lnα, v, _exp=np.exp, _log=np.log, polygamma=scipy.special.polygamma):
 # :::
 #
 # ::::
-# :::::
 
 # %% tags=["active-ipynb"]
 # def get_beta_rv(r: Real, v: Real) -> Tuple[float]:
@@ -1116,16 +1120,16 @@ def draw_from_beta(r: Union[Real,Array[float,1]],
 # %% tags=["active-ipynb", "remove-cell"]
 # # np.save("timing_cache_jax-vs-numpy_draw-from-beta", _time_data)
 
-# %%
-# for ((L, r, v, npa, npb, npc, jaxa, jaxb, jaxc),
-#      (_, _, _, _npa, _npb, _npc, _jaxa, _jaxb, _jaxc)) in zip(time_data, _time_data):
-#     print("* -", int(L))
-#     print("  -", r)
-#     print("  -", v)
-#     print("  -", time_str(ResData(npa, npb, npc)))
-#     print("  -", time_str(ResData(jaxa, jaxb, jaxc)))
-#     print("  -", time_str(ResData(_npa, _npb, _npc)))
-#     print("  -", time_str(ResData(_jaxa, _jaxb, _jaxc)))                       
+# %% tags=["remove-cell", "active-ipynb"]
+# # for ((L, r, v, npa, npb, npc, jaxa, jaxb, jaxc),
+# #      (_, _, _, _npa, _npb, _npc, _jaxa, _jaxb, _jaxc)) in zip(time_data, _time_data):
+# #     print("* -", int(L))
+# #     print("  -", r)
+# #     print("  -", v)
+# #     print("  -", time_str(ResData(npa, npb, npc)))
+# #     print("  -", time_str(ResData(jaxa, jaxb, jaxc)))
+# #     print("  -", time_str(ResData(_npa, _npb, _npc)))
+# #     print("  -", time_str(ResData(_jaxa, _jaxb, _jaxc)))                       
 
 # %% tags=["remove-cell", "active-ipynb"]
 # # def format_with_unit(val, unit):
@@ -1315,14 +1319,14 @@ def generate_path_hierarchical_beta(
 # %% [markdown]
 # ### Generate ensemble of sample paths
 #
-# :::{Note} This is the only public function exposed by this module
+# :::{Note} `generate_quantile_paths` and `generate_path_hierarchical_beta` are the only two public functions exposed by this module.
 # :::
 #
 # To generate $R$ paths, we repeat the following $R$ times:
 # 1. Select start and end points by sampling $\nN(\tilde{Φ}[0], \lnLtt{}[0])$ and $\nN(\tilde{Φ}[-1], \lnLtt{}[-1])$.
 # 2. Call `generate_path_hierarchical_beta`.
 
-# %% editable=true slideshow={"slide_type": ""} tags=["remove-cell"]
+# %% editable=true slideshow={"slide_type": ""}
 def generate_quantile_paths(qstar: Callable, deltaEMD: Callable, c: float,
                             M: int, res: int=8, rng=None,
                             *, Phistart: float=0., Phiend: float=1,
@@ -1429,8 +1433,7 @@ def generate_quantile_paths(qstar: Callable, deltaEMD: Callable, c: float,
 # ### Usage example
 
 # %% editable=true slideshow={"slide_type": ""} tags=["active-ipynb", "hide-input"]
-# #Φtilde = np.linspace(0.01, 1, 20)
-# qstar = np.log
+# qstar = np.log  # Dummy function; normally this would be obtain from data
 # σtilde = lambda Φ: 1.5*np.ones_like(Φ)
 #
 # colors = cycle = config.viz.colors.bright
@@ -1440,6 +1443,7 @@ def generate_quantile_paths(qstar: Callable, deltaEMD: Callable, c: float,
 #         qstar, σtilde, c=1, M=10, res=8, rng=None, Phistart=0.01):
 #     curves_qhat.append(hv.Curve(zip(Φhat, qhat), label=r"$\hat{l}$", kdims=["Φ"])
 #                        .opts(color=colors.grey))
+#
 # Φtilde = np.linspace(0.01, 1, 20)
 # curve_qstar = hv.Curve(zip(Φtilde, qstar(Φtilde)), label=r"$\tilde{l}$", kdims=["Φ"]) \
 #                         .opts(color=colors.blue)

@@ -24,6 +24,7 @@ math:
   '\Me'    : '\mathcal{M}^ε'
   '\Unif'  : '\mathop{\mathrm{Unif}}'
   '\Philt' : '\widetilde{Φ}_{|#1}'
+  '\EMD'   : '\mathrm{EMD}'
   '\Bemd'  : 'B_{#1}^{\mathrm{EMD}}'
 ---
 
@@ -32,7 +33,7 @@ math:
 (supp_emd-implementation)=
 # EMD implementation
 
-```{code-cell} ipython3
+```{code-cell}
 ---
 editable: true
 slideshow:
@@ -65,7 +66,7 @@ config = Config()
 logger = logging.getLogger(__name__)
 ```
 
-```{code-cell} ipython3
+```{code-cell}
 __all__ = ["interp1d", "make_empirical_risk_ppf", "draw_R_samples", "Bemd"]
 ```
 
@@ -73,7 +74,7 @@ __all__ = ["interp1d", "make_empirical_risk_ppf", "draw_R_samples", "Bemd"]
 
 Notebook only imports
 
-```{code-cell} ipython3
+```{code-cell}
 ---
 editable: true
 slideshow:
@@ -87,7 +88,7 @@ logging.basicConfig(level=logging.WARNING)
 logger.setLevel(logging.ERROR)
 ```
 
-```{code-cell} ipython3
+```{code-cell}
 ---
 editable: true
 slideshow:
@@ -109,7 +110,7 @@ $$\begin{aligned}
 
 The upper part of the yellow region is never sampled, because monotonicity prevents paths from exceeding $\log 1$ at any point. The constant $c$ is determined by a calibration experiment, and controls the variability of paths. Here we use $c=1$.
 
-```{code-cell} ipython3
+```{code-cell}
 ---
 editable: true
 slideshow:
@@ -126,12 +127,12 @@ M = 20
 lcurve = hv.Curve(zip(Φarr, qstar(Φarr)), kdims=["Φ"], vdims=["l"], label=r"$\langle\tilde{l}\rangle$")
 σarea = hv.Area((Φarr, qstar(Φarr) - σtilde(Φarr), qstar(Φarr) + σtilde(Φarr)),
                 kdims=["Φ"], vdims=["l-σ", "l+σ"])
-GP_fig = σarea.opts(edgecolor="none", facecolor="#EEEEBB", backend="matplotlib") * lcurve
+GP_fig = σarea.opts(color="none", edgecolor="none", facecolor="#EEEEBB", backend="matplotlib") * lcurve
 
 qhat_gen = generate_quantile_paths(qstar, σtilde, c=1, M=M, res=res, Phistart=Φarr[0])
 random_colors = default_rng().uniform(0.65, 0.85, M).reshape(-1,1) * np.ones(3)  # Random light grey for each curve
 qhat_curves = [hv.Curve(zip(Φhat, qhat), kdims=["Φ"], vdims=["l"], label=r"$\hat{l}$")
-               .opts(color=color)               
+               .opts(color=color, backend=config.viz.backend)               
                for (Φhat, qhat), color in zip(qhat_gen, random_colors)]
 
 Φ_fig = hv.Overlay(qhat_curves)
@@ -154,7 +155,7 @@ $$\begin{aligned}
 \tilde{\l} &= \log Φ\,, & Φ &\in [0, 1]
 \end{aligned}$$
 
-```{code-cell} ipython3
+```{code-cell}
 ---
 editable: true
 slideshow:
@@ -170,12 +171,12 @@ M = 20
 lcurve = hv.Curve(zip(Φarr, qstar(Φarr)), kdims=["Φ"], vdims=["l"], label=r"$\langle\tilde{l}\rangle$")
 σarea = hv.Area((Φarr, qstar(Φarr) - σtilde(Φarr), qstar(Φarr) + σtilde(Φarr)),
                 kdims=["Φ"], vdims=["l-σ", "l+σ"])
-GP_fig = σarea.opts(edgecolor="none", facecolor="#EEEEBB", backend="matplotlib") * lcurve
+GP_fig = σarea.opts(color="none", edgecolor="none", facecolor="#EEEEBB", backend="matplotlib") * lcurve
 
 qhat_gen = generate_quantile_paths(qstar, σtilde, c=1, M=M, res=res, Phistart=Φarr[0])
 random_colors = default_rng().uniform(0.65, 0.85, M).reshape(-1,1) * np.ones(3)  # Random light grey for each curve
 qhat_curves = [hv.Curve(zip(Φarr, qhat), kdims=["Φ"], vdims=["l"], label=r"$\hat{l}$")
-               .opts(color=color)               
+               .opts(color=color, backend=config.viz.backend)
                for (Φhat, qhat), color in zip(qhat_gen, random_colors)]
 
 Φ_fig = hv.Overlay(qhat_curves)
@@ -191,11 +192,11 @@ GP_fig * Φ_fig
 
 ### Serializable 1d interpolator
 
-Our [workflow tasks](./tasks.py) require arguments to be serializable, which include the callable arguments used to compute the center $q^*$ and square root of the metric variance ($c δ^{\EMD}$). These functions are almost always going to be obtained by constructing an interpolator from empirical samples, and the obvious choice for that is *SciPy*’s `interp1d`. However this type is of course not serializable out of the box.
+Our [workflow tasks](./tasks.md) require arguments to be serializable, which include the callable arguments used to compute the center $q^*$ and the metric variance ($c (δ^{\EMD})^2$). These functions are almost always going to be obtained by constructing an interpolator from empirical samples, and the obvious choice for that is *SciPy*’s `interp1d`. However this type is of course not serializable out of the box.
 
-We could define a custom version of `interp1d` (in fact we do) which adds serializability within our framework. However this would be bad form, requiring users to use special classes for seemingly obscure reasons. So instead we make the original class in `scipy.interpolate` serializable, following the format described in [*Defining serializers for preexisting types*](https://scityping.readthedocs.io/en/stable/defining-serializers.html) from the *scityping* documentation. In the process this does define a custom `interp1d` type, but in practice either this one or the standard one from `scipy.interpolate` can be used interchangeably.
+To add serializability, we define a custom version of `interp1d` which adds the necessary functions. In addition, by reusing the name `interp1d`, *scityping* automatically makes the original class in `scipy.interpolate` also serializable. (See [*Defining serializers for preexisting types*](https://scityping.readthedocs.io/en/stable/defining-serializers.html) from the *scityping* documentation.) This way the serialization functionality is completely transparent, and users can use the standard `interp1d` function *SciPy* in their code.
 
-```{code-cell} ipython3
+```{code-cell}
 ---
 editable: true
 slideshow:
@@ -230,28 +231,28 @@ class interp1d(Serializable, scipy.interpolate.interp1d):
 
 ## Estimate the risk quantile function
 
-Also known as the point probability function (PPF), this is the function $q(Φ)$ required by `draw_R_samples` to draw samples of the expected risk. Note that this is the quantile function *of the risk*, not of models predictions, so it is always a 1d function.
+Also known as the point probability function (PPF), this is the function $q(Φ)$ required by `draw_R_samples` to draw samples of the expected risk. Note that this is the quantile function *of the loss*, not of models predictions, so it is always a 1d function.
 
 - The abscissa of the quantile function (PPF) is the cumulative probability $Φ \in [0, 1]$.
-  The ordinate is the *risk* of a data sample.
+  The ordinate is the *loss* of a data sample.
 - The integral of $q(Φ)$ is the expected risk: $\int_0^1 q(Φ) dΦ = R$.  
   (This is easy to see in 1d, where $dΦ = p(x)dx$.)
-- The EMD approximation defines a distribution over quantile functions of the risk.
-  - It sets the square root of the *metric variance* at $Φ$ to be proportional to the discrepancy between $q^*(Φ)$ and $\tilde{q}(Φ)$.
+- The EMD approximation defines a distribution over quantile functions of the loss.
+  - It sets the square root of the *metric variance* at $Φ$ to be proportional to the discrepancy between $q^*(Φ)$ and $\tilde{q}(Φ)$. We name this discrepancy $δ^{\EMD}(Φ)$.
 
 +++ {"editable": true, "slideshow": {"slide_type": ""}}
 
-In some cases it may be possible to derive $q$ analytically from a models equations, but in general we need to estimate it from samples. Concretelly all this does is construct a `scipy.interpolate.interp1d` object: if $L$ risk samples are given, they are sorted, and assigned the cumulative probabilities $Φ = \frac{1}{L+1}, \frac{2}{L+1}, \dotsc, \frac{L}{L+1}$. Intermediate values are obtained by linear interpolation. We don’t assign  the $Φ=0$ and $Φ=1$, since it is more conservative to assume that the absolute extrema have not been sampled – instead we use linear extrapolation for the small intervals $\bigl[0, \frac{1}{L+1}\bigr)$ and $\bigl(\frac{L}{L+1}, 1\bigr]$.
+In some cases it may be possible to derive $q$ analytically from a models equations, but in general we need to estimate it from samples. Concretelly all this does is construct a `scipy.interpolate.interp1d` object: if $L$ risk samples are given, they are sorted and assigned the cumulative probabilities $Φ = \frac{1}{L+1}, \frac{2}{L+1}, \dotsc, \frac{L}{L+1}$. Intermediate values are obtained by linear interpolation. We don’t assign  the $Φ=0$ and $Φ=1$, since it is more conservative to assume that the absolute extrema have not been sampled – instead we use linear extrapolation for the small intervals $\bigl[0, \frac{1}{L+1}\bigr)$ and $\bigl(\frac{L}{L+1}, 1\bigr]$.
 
 If users want to use different assumptions – for example if users know that the highest possible risk is part of the sample set – then they may construct the `scipy.interpolate.interp1d` object directly.
 
-```{code-cell} ipython3
+```{code-cell}
 ---
 editable: true
 slideshow:
   slide_type: ''
 ---
-def make_empirical_risk_ppf(risk_samples: Array[float,1]):
+def make_empirical_risk_ppf(risk_samples: Array[float,1]) -> interp1d:
     """Convert a set of samples into a callable and serializable PPF function.
 
     The PPF describes the distribution from which the samples were drawn.
@@ -261,9 +262,11 @@ def make_empirical_risk_ppf(risk_samples: Array[float,1]):
     Consequently, the best test to check whether the empirical PPF is a good
     approximation is simply to plot it and inspect the result visually.
 
-    Concretely this just a wrapper for `scipy.interpolate.interp1d`, with a
-    possibly more intuitive function and argument names.
-    It is completely equivalent to call `interp1d` directly.
+    Concretely this just a wrapper for `scipy.interpolate.interp1d`, specialized
+    to the case of interpolating a PPF. The more descriptive function and argument
+    names help make higher-level code more readable.
+    Instead of using this function, it is also possible to call `interp1d` directly;
+    one simply needs to then also specify appropriate abscissa values.
 
     .. Important:: This expects to receive samples of the risk (not the model).
        Typically this is obtain with something like ``risk(model(n_data_points))``,
@@ -278,7 +281,7 @@ def make_empirical_risk_ppf(risk_samples: Array[float,1]):
        The easiest way to make an arbitrary callable serializable is probably to
        use a `dataclasses.dataclass`: use class attributes for the parameters,
        and define the PPF in the __call__ method. (Scityping has built-in support
-       for dataclasses with simply data types.)
+       for dataclasses with simple data types.)
 
     """
     risk_samples = np.asarray(risk_samples)
@@ -306,13 +309,13 @@ def make_empirical_risk_ppf(risk_samples: Array[float,1]):
 
 - Array of $R$ values, drawn from from the EMD distribution
 
-See {prf:ref}`alg-estimator-statistics`.
-
 +++ {"editable": true, "slideshow": {"slide_type": ""}}
 
-:::{margin}  
+:::{note}  
+:class: margin
 The rule for computing `new_M` comes from the following ($ε$: `stderr`, $ε_t$: `stderr_tol`, $M'$: `new_M`)
 ```{math}
+\begin{aligned}
 ε &= σ/\sqrt{M} \\
 ε' &= σ/\sqrt{M'} \\
 \frac{ε^2}{ε'^2} &= \frac{M'}{M}
@@ -320,7 +323,7 @@ The rule for computing `new_M` comes from the following ($ε$: `stderr`, $ε_t$:
 ```
 :::
 
-```{code-cell} ipython3
+```{code-cell}
 ---
 editable: true
 slideshow:
@@ -420,7 +423,7 @@ def draw_R_samples(mixed_risk_ppf: Callable,
     def generate_paths(M, previous_M=0, qstar=mixed_risk_ppf, δemd=δemd, c=c, res=res, progbar=path_progbar):
         for Φhat, qhat in generate_quantile_paths(qstar, δemd, c=c, M=M, res=res,
                                                   progbar=progbar, previous_M=previous_M):
-            m1.append(simpson(qhat, Φhat))  # Generated paths always have an odd number of steps, which is good for Simpson's rule
+            m1.append(simpson(y=qhat, x=Φhat))  # Generated paths always have an odd number of steps, which is good for Simpson's rule
 
     generate_paths(M)
     μ1 = np.mean(m1)
@@ -457,6 +460,7 @@ def draw_R_samples(mixed_risk_ppf: Callable,
 
 +++ {"editable": true, "slideshow": {"slide_type": ""}}
 
+(sec_emd_test-sampling)=
 ### Test sampling of expected risk $R$
 
 $$\begin{aligned}
@@ -480,9 +484,9 @@ y &\sim e^{-λx} + ξ
 
 In this example, neither model $A$ nor $B$ is a perfect fit to the data, since they both incorrectly assume an unbiased noise. Moreover, both models seem to predict the observations equally well; in other words, we expect the EMD criterion to be *equivocal* between models $A$ and $B$.
 
-Within the EMD framework, models are compared as usual based on their expected risk $R$. This captures aleatoric uncertainty – i.e. randomness inherent to the model, such as the $ξ$ process above. The EMD criterion then further captures *epistemic* uncertainty by treating $R$ as a random variable, and considering *its* distribution. Roughly speaking, the better a model is at predicting the data distribution, the tighter its $R$ distribution will be. (For example, a model can have a lot of noise, but if we can predict the statistics of that noise accurately, then the distribution on $R$ will be tight and its uncertainty low.)
+Within the EMD framework, models are compared as usual based on their expected risk $R$. This captures aleatoric uncertainty – i.e. randomness inherent to the model, such as the $ξ$ random variable above. The EMD criterion then further captures *epistemic* uncertainty by treating $R$ itself as a random variable, and considering *its* distribution. Roughly speaking, the better a model is at predicting the data distribution, the tighter its $R$ distribution will be. (For example, a model can have a lot of noise, but if we can predict the statistics of that noise accurately, then the distribution on $R$ will be tight and its uncertainty low.)
 
-```{code-cell} ipython3
+```{code-cell}
 ---
 editable: true
 slideshow:
@@ -540,7 +544,7 @@ In this example, the discrepancy between the theoretical models and the observed
 - **Synthetic** PPF — Same theoretical model for both the defining the risk and generating the (synthetic) data.
 - **Mixed** PPF – Different models for the risk and data: Again a theoretical model is used to define the risk, but now it is evaluated on real observed data.
 
-```{code-cell} ipython3
+```{code-cell}
 ---
 editable: true
 slideshow:
@@ -561,7 +565,7 @@ panel_data.opts(
 )
 ```
 
-```{code-cell} ipython3
+```{code-cell}
 ---
 editable: true
 slideshow:
@@ -592,7 +596,7 @@ layout.opts(
 )
 ```
 
-```{code-cell} ipython3
+```{code-cell}
 ---
 editable: true
 slideshow:
@@ -616,11 +620,11 @@ panel_RB = distB * RBlines
 +++ {"editable": true, "slideshow": {"slide_type": ""}}
 
 Each model induces a distribution for its expected risk, so with two models $A$ and $B$ we have distributions for $R_A$ and $R_B$.
-The figures below show the sampled values for $R_A$ and $R_B$, along overlayed with a kernel density estimate of their distribution.
+The figures below show the sampled values for $R_A$ and $R_B$, overlayed with a kernel density estimate of their distribution.
 
 In this case both distributions are very tight, and any difference between them are due as much to finite sampling than to the likelihood picking up which one is the better fit. This translates into distributions with very high overlap, and therefore a probability approximately ½ that model $A$ is better than $B$. In other words, the criterion is *equivocal* between $A$ and $B$, as we expected.
 
-```{code-cell} ipython3
+```{code-cell}
 ---
 editable: true
 slideshow:
@@ -631,11 +635,11 @@ fig = panel_RA + panel_RB + panel_RA*panel_RB
 
 panel_RA.opts(
     hv.opts.Spikes("model A", color=colors["dark blue"], alpha=0.25),
-    hv.opts.Distribution("model A", edgecolor=colors["dark blue"], facecolor=colors["light blue"], backend="matplotlib")
+    hv.opts.Distribution("model A", color="none", edgecolor=colors["dark blue"], facecolor=colors["light blue"], backend="matplotlib")
 )
 panel_RB.opts(
     hv.opts.Spikes("model B", color=colors["dark red"], alpha=0.25),
-    hv.opts.Distribution("model B", edgecolor=colors["dark red"], facecolor=colors["light red"], backend="matplotlib")
+    hv.opts.Distribution("model B", color="none", edgecolor=colors["dark red"], facecolor=colors["light red"], backend="matplotlib")
 )
 
 fig.opts(
@@ -666,7 +670,7 @@ We can write the sum as nested Python loops:
 (`RA_lst` and `RB_lst` are the expected risk samples generated in the example above.)
 :::
 
-```{code-cell} ipython3
+```{code-cell}
 ---
 editable: true
 slideshow:
@@ -682,9 +686,9 @@ s / len(RA_lst) / len(RB_lst)
 
 +++ {"editable": true, "slideshow": {"slide_type": ""}}
 
-However it is much faster (about 50x in this case) to use a NumPy ufunc:
+However it is much faster (about 50x in this test example) to use a NumPy ufunc:
 
-```{code-cell} ipython3
+```{code-cell}
 ---
 editable: true
 slideshow:
@@ -696,13 +700,25 @@ np.less.outer(RA_lst, RB_lst).mean()
 
 +++ {"editable": true, "slideshow": {"slide_type": ""}}
 
-The `Bemd` function is essentially a convenience function for comparing two models, which calls `draw_R_samples` (once for each models) and then computes the criterion value as above.
+The `Bemd` function is a convenience function for comparing two models, which calls `draw_R_samples` (once for each models) and then computes the criterion value as above. The essence of the function is three lines:
 
-```{code-cell} ipython3
+```python
+def Bemd(mixed_risk_ppfA: Callable, mixed_risk_ppfB: Callable,
+         synth_risk_ppfA: Callable, synth_risk_ppfB: Callable,
+         c: float, *, ...):
+  RA_lst = draw_R_samples(mixed_risk_ppfA, synth_risk_ppfA, c=c, ...)
+  RB_lst = draw_R_samples(mixed_risk_ppfB, synth_risk_ppfB, c=c, ...)
+  return np.less.outer(RA_lst, RB_lst).mean()
+```
+
+The rest of the code is wraps the necessary boilerplate for dispatching the generation of $R$ samples to multiple processes, and keeping progress bars updated.
+
+```{code-cell}
 ---
 editable: true
 slideshow:
   slide_type: ''
+tags: [hide-input]
 ---
 def mp_wrapper(f: Callable, *args, out: "mp.queues.Queue", **kwargs):
     "Wrap a function by putting its return value in a Queue. Used for multiprocessing."
@@ -711,7 +727,7 @@ def mp_wrapper(f: Callable, *args, out: "mp.queues.Queue", **kwargs):
 LazyPartial = Union[Callable, Tuple[Callable, Mapping]]
 ```
 
-```{code-cell} ipython3
+```{code-cell}
 ---
 editable: true
 slideshow:
@@ -869,7 +885,7 @@ def Bemd(mixed_risk_ppfA: Callable, mixed_risk_ppfB: Callable,
 
 Calling `Bemd` returns the same value as above, up to sampling error:
 
-```{code-cell} ipython3
+```{code-cell}
 ---
 editable: true
 slideshow:
@@ -879,7 +895,7 @@ tags: [active-ipynb]
 Bemd(mixed_ppfA, mixed_ppfB, synth_ppfA, synth_ppfB, c=1)
 ```
 
-```{code-cell} ipython3
+```{code-cell}
 ---
 editable: true
 slideshow:

@@ -160,10 +160,15 @@ class EpistemicDist(abc.ABC):
 # ##### Effects on compute time
 #
 # The total number of experiments will be
-# $$N \times \lvert\mathtt{c\_list}\rvert \times \text{(\# parameter set distributions)} \,.$$
-# In the best scenario, one can expect compute times to be 2.5 minutes / experiment. So expect this to take a few hours.
+# ```{math}
+# N \times \lvert\mathtt{c\_list}\rvert \times \text{(\# parameter set distributions)} \,.
+# ```
+# In the best scenario, one can expect compute times to be 2.5 minutes / experiment.[^how-to-make-faster] So expect this to take a few hours.
 #
-# Results are cached on-disk with [joblib.Memory](https://joblib.readthedocs.io/en/latest/memory.html), so this notebook can be reexecuted without re-running the experiments. Loading from disk takes about 1 minute for 6000 experiments.
+# Results are cached on-disk with [joblib.Memory](https://joblib.readthedocs.io/en/latest/memory.html), so code containing calibration experiments can be reexecuted without needing to re-run the experiments. Loading from disk takes about 1 minute for 6000 experiments.
+#
+# [^how-to-make-faster]: This could be improved with better optimized implementation of the [hierarchical beta sampling process](code_path-sampling_hierarchical-beta).
+#
 #
 # ##### Effects on caching
 #
@@ -196,7 +201,7 @@ class EpistemicDist(abc.ABC):
 #
 # To satisfy these requirements, the sequence `models` needs to be specified as a frozen dataclass:[^more-formats] Dataclasses for serializability, frozen for hashability. Of course they should also define `__iter__` and `__len__` – see [`EpistemicDist`](code_calibration-distribution) for an example.
 #
-# [CHECK: I think loss functions are unrestricted now ? Maybe impact on caching ?] The loss functions `QA` and `QB` functions can be specified as either dataclasses (with a suitable `__call__` method) or [`PureFunction`s](https://scityping.readthedocs.io/en/latest/api/functions.html#scityping.functions.PureFunction). In practice we found dataclasses easier to use.
+# [CHECK: I think loss functions are unrestricted now ? Maybe impact on caching ?] The loss functions `QA` and `QB` can be specified as either dataclasses (with a suitable `__call__` method) or [`PureFunction`s](https://scityping.readthedocs.io/en/latest/api/functions.html#scityping.functions.PureFunction). In practice we found dataclasses easier to use.
 #
 # [^more-formats]: We use dataclasses because they are the easiest to support, but support for other formats could be added in the future.
 
@@ -205,10 +210,12 @@ SynthPPF = Callable[[np.ndarray[float]], np.ndarray[float]]
 
 # %% [markdown] editable=true slideshow={"slide_type": ""}
 # The items of the `models` sequence must be functions which take a single argument – the data size $L$ – and return a data set of size $L$:
-# $$\begin{aligned}
-# \texttt{data\_model}&:& L &\mapsto
+# ```{math}
+# \begin{aligned}
+# \texttt{data_model}&:& L &\mapsto
 #       \bigl[(x_1, y_1), (x_2, y_2), \dotsc, (x_L, y_L)\bigr]
-# \end{aligned} \,. $$
+# \end{aligned} \,.
+# ```
 # Exactly how the dataset is structured (single array, list of tuples, etc.) is up to the user.
 
 # %% editable=true slideshow={"slide_type": ""}
@@ -222,9 +229,11 @@ CandidateModel = Callable[[Dataset], Dataset]
 
 # %% [markdown] editable=true slideshow={"slide_type": ""}
 # The `riskA` and `riskB` functions take a dataset returned by `data_model` and evaluate the risk $q$ of each sample. They return a vector of length $L$, and their signature depends on the output format of `data_model`:
-# $$\begin{aligned}
+# ```{math}
+# \begin{aligned}
 # \texttt{risk function}&:& \{(x_i,y_i)\}_{i=1}^L &\mapsto \{q_i\}_{i=1}^L \,.
-# \end{aligned}$$
+# \end{aligned}
+# ```
 
 # %% editable=true slideshow={"slide_type": ""}
 RiskFunction = Callable[[Dataset], np.ndarray]
@@ -236,7 +245,7 @@ RiskFunction = Callable[[Dataset], np.ndarray]
 # Calibration results are returned as a [record array](https://numpy.org/doc/stable/user/basics.rec.html#record-arrays) with fields `Bemd` and `Bconf`. Each row in the array corresponds to one data model, and there is one array per $c$ value. So a `CalibrateResult` object is a dictionary which looks something like the following:
 
 # %% [markdown] editable=true slideshow={"slide_type": ""}
-# $$
+# ```{math}
 # \begin{alignedat}{4}  % Would be nicer with nested {array}, but KaTeX doesn’t support vertical alignment
 # &\texttt{CalibrateResult}:\qquad & \{ c_1: &\qquad&  \texttt{Bemd} &\quad& \texttt{Bconf} \\
 #   &&&&  0.24    && 0 \\
@@ -250,7 +259,8 @@ RiskFunction = Callable[[Dataset], np.ndarray]
 #   &&&&  0.30    && 1 \\
 #   &&\vdots \\
 #   &&\}
-# \end{alignedat}$$
+# \end{alignedat}
+# ```
 
 # %% editable=true slideshow={"slide_type": ""}
 calib_point_dtype = np.dtype([("Bemd", float), ("Bconf", bool)])
@@ -460,6 +470,8 @@ class Calibrate:
 
 
 # %% [markdown] editable=true slideshow={"slide_type": ""}
+# #### Prepare the runs
+#
 # Bind arguments to the `Bemd` function, so it only take one argument (`datamodel_c`) as required by `imap`.
 
         # %% editable=true slideshow={"slide_type": ""} tags=["skip-execution"]
@@ -492,7 +504,8 @@ class Calibrate:
         ncores = min(ncores, total, config.mp.max_cores)
 
 # %% [markdown]
-# Run the experiments. Since there are a lot of them, and they each take a few minutes, we use multiprocessing to run them in parallel.
+# #### Run the experiments
+# Since there are a lot of them, and they each take a few minutes, we use multiprocessing to run them in parallel.
 
         # %% editable=true slideshow={"slide_type": ""} tags=["skip-execution"]
         ω_c_gen = ((i, ω, c)  # i is used as an id for each different model/Qs set
@@ -540,15 +553,15 @@ class Calibrate:
             #         Bconf_results[i] = compute_Bconf(data_model, QA, QB, Linf)
 
 # %% [markdown] editable=true slideshow={"slide_type": ""}
-# Close progress bar:
+# #### Cleanup
 
         # %% editable=true slideshow={"slide_type": ""} tags=["skip-execution"]
         progbar.close()
 
 # %% [markdown] editable=true slideshow={"slide_type": ""}
-# #### Result format
+# #### Package the results
 #
-# If we serialize the whole dict, most of the space is taken up by serializing the models in the keys. Not only is this wasteful – we can easily recreate them with `model_c_gen` – but it also makes deserializing the results quite slow.
+# If we serialize the whole dict, most of the space is taken up by serializing the models in the keys. Not only is this wasteful – we can easily recreate them from the task arguments – but it also makes deserializing the results quite slow.
 # So instead we return just the values as a list, and provide an `unpack_result` method which reconstructs the result dictionary.
 # :::{caution}
 # This assumes that we get the same models when we rebuild them within `unpack_result`.
@@ -558,17 +571,22 @@ class Calibrate:
 # - The model generation is non-reproducible. (E.g. it uses an unseeded RNG).
 # :::
 
-        # %% editable=true slideshow={"slide_type": ""} tags=["skip-execution"]
+        # %% editable=true slideshow={"slide_type": ""} tags=["skip-execution", "remove-cell"]
         # NB: Don’t just use list(Bemd_results.values()): order of dictionary is not guaranteed
         return dict(Bemd =[Bemd_results [i,c] for i in range(len(experiments)) for c in c_list],
                     Bconf=[Bconf_results[i]   for i in range(len(experiments))])
 
-# %% [markdown] editable=true slideshow={"slide_type": ""}
+# %% [markdown] tags=["remove-cell"] editable=true slideshow={"slide_type": ""}
 # > **END OF `Calibrate.__call__`**
 
     # %% editable=true slideshow={"slide_type": ""} tags=["skip-execution"]
     def unpack_results(self, result: Calibrate.Outputs.result_type
                       ) -> CalibrateResult:
+        """
+        Take the compressed result exported by the task, and recreate the
+        dictionary structure of a `CalibrateResult`, where experiments are
+        organized by their value of `c`.
+        """
         assert len(result.Bemd) == len(self.c_list) * len(result.Bconf), \
             "`result` argument seems not to have been created with this task."
         # Reconstruct the dictionary as it was at the end of task execution
@@ -591,23 +609,3 @@ class Calibrate:
         #return UnpackedCalibrateResult(Bemd=Bemd_dict, Bconf=Bconf_dict)
         return {c: np.array(calib_curve_data[c], dtype=calib_point_dtype)
                 for c in self.taskinputs.c_list}
-
-# %% [markdown] editable=true slideshow={"slide_type": ""}
-# #### (Model, $c$) generator
-#
-# `task.model_c_gen` yields combined `(data_model, c)` tuples by iterating over both `models` and `c_list`. The reason we implement this in its own method is so we can recreate the sequence of models and $c$ values in `unpack_results`: this way we only need to store the sequence of $\Bemd{}$ and $\Bconf{}$ values for each (model, $c$) pair, but not the models themselves.
-
-    # %% editable=true slideshow={"slide_type": ""} tags=["skip-execution"]
-    # def model_c_gen(self, Bemd_results: "dict|set", Bconf_results: "dict|set"):
-    #     """Return an iterator over data models and c values.
-    #     The two additional arguments `Bemd_results` and `Bconf_results` should be sets of
-    #     *already computed* results. At the moment this is mostly a leftover from a previous
-    #     implementation, before this function was made a *Task* — in the current 
-    #     implementation, the task always behaves as though empty dictionaries were passed.
-    #     """
-    #     for data_model, modelA, modelB in self.taskinputs.models:    # Using taskinputs allows us to call `model_c_gen`
-    #         for c in self.taskinputs.c_list:             # after running the task to recreate the keys.
-    #             if (data_model, c) not in Bemd_results:
-    #                 yield (data_model, modelA, modelB, c)
-    #             else:                                    # Skip results which are already loaded
-    #                 assert data_model in Bconf_results

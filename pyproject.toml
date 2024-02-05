@@ -68,6 +68,13 @@ viz = ["pandas", "matplotlib", "seaborn", "holoviews", "addict"]
 
 ## Executing notebooks and building “code browser” pages ##
 doc = [
+    # Everything from viz
+    "pandas",
+    "matplotlib",
+    "seaborn",
+    "holoviews",
+    "addict",
+
     "jupyter-book>=0.14",
     "sphinx-proof",
     "jupytext",
