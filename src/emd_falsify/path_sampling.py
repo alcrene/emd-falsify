@@ -58,6 +58,7 @@ import scipy.optimize
 from tqdm.auto import tqdm
 
 from collections.abc import Callable
+from pathlib import Path
 from typing import Optional, Union, Literal, Tuple, Generator
 from scityping import Real
 from scityping.numpy import Array, Generator as RNGenerator
@@ -335,12 +336,13 @@ def f_mid(lnα, v, _exp=np.exp, _log=np.log, polygamma=scipy.special.polygamma):
 # #glue("fig_polygamma", fig, display=None)
 
 # %% tags=["remove-cell", "active-ipynb"]
-# path = config.paths.figures/f"path-sampling_polygamma"
+# #path = config.paths.figures/f"path-sampling_polygamma"
+# path = Path("path-sampling_polygamma")
 # hv.save(fig, path.with_suffix(".svg"), backend="matplotlib")
-# hv.save(fig, path.with_suffix(".pdf"), backend="matplotlib")
+# # hv.save(fig, path.with_suffix(".pdf"), backend="matplotlib")
 
 # %% [markdown]
-# :::{figure} ../../figures/path-sampling_polygamma.svg
+# :::{figure} path-sampling_polygamma.svg
 # :name: fig_polygamma
 #
 # Characterization of the digamma ($ψ$) and trigamma ($ψ_1$) functions, and of the metric variance $\Mvar$.  
@@ -366,12 +368,13 @@ def f_mid(lnα, v, _exp=np.exp, _log=np.log, polygamma=scipy.special.polygamma):
 # #glue("fig_Jac-spectrum", fig, display=False)
 
 # %% tags=["remove-cell", "active-ipynb"]
-# path = config.paths.figures/f"path-sampling_jac-spectrum"
+# #path = config.paths.figures/f"path-sampling_jac-spectrum"
+# path = Path("path-sampling_jac-spectrum")
 # hv.save(fig, path.with_suffix(".svg"), backend="matplotlib")
-# hv.save(fig, path.with_suffix(".pdf"), backend="matplotlib")
+# #hv.save(fig, path.with_suffix(".pdf"), backend="matplotlib")
 
 # %% [markdown]
-# :::{figure} ../../figures/path-sampling_jac-spectrum.svg
+# :::{figure} path-sampling_jac-spectrum.svg
 # :name: fig_Jac-spectrum
 #
 # **Objective function has a saddle-point around (0,0)**
