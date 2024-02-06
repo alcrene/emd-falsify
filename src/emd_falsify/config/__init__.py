@@ -44,7 +44,8 @@ class Config(ValConfig):
     class paths:
         figures : Path
 
-        ensure_dir_exists = validator('figures', allow_reuse=True)(ensure_dir_exists)
+        # This is typically used as a library: don’t create random paths on users’ computers
+        #ensure_dir_exists = validator('figures', allow_reuse=True)(ensure_dir_exists)
 
     class mp:
         max_cores: int
