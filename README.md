@@ -43,7 +43,7 @@ Bemd(mixed_ppfA, mixed_ppfB, synth_ppfA, synth_ppfB, c=c)
 ```
 
 We also expose additional functions like the lower level `draw_R_samples`.
-These may be more verbose, but especially for cases with multiple models to compare,
+Using them is a bit more verbose, but especially for cases with multiple models to compare,
 they may be more convenient.
 
 Note that comparisons depend on choosing an appropriate value for `c`; a systematic way to do this is via a *calibration experiment*, as described in our publication.
@@ -63,12 +63,12 @@ If computations are taking inordinately long, set the debug level to `DEBUG`:
     
     logging.getLogger("emd_falsify").setLevel("DEBUG")
 
-This will print messages to your console reporting how much time each computation step is taking.
+This will print messages to your console reporting how much time each computation step is taking, which should help pin down the source of the issue.
 
 ## Further work
 
 The current implementation of the hierarchical beta process (used for sampling quantile paths) has seen quite a lot of testing for numerical stability, but little optimization effort. In particular it makes a lot of calls to functions in `scipy.optimize`, which makes the whole function quite slow: even with a relatively complicated data model like the [pyloric circuit](https://alcrene.github.io/pyloric-network-simulator/pyloric_simulator/prinz2004.html), drawing quantile paths can still take 10x longer than generating the data.
 
-Substantial performance improvements to the sampling algorithm are almost certainly possible with dedicated computer science effort, which would proportionately reduce compute time for the whole EMD procedure.
+Substantial performance improvements to the sampling algorithm would almost certainly be possible with dedicated computer science effort. This sampling is the main bottleneck, any improvement on this front would also benefit the whole EMD procedure.
 
-The hierarchical beta process is also not the only possible process for stochastically generating quantile paths: it was chosen in part because it made proving self-consistency particularly simple. Other processes may provide other advantages, either with respect to statistical robustness or computation speed.
+The hierarchical beta process is also not the only possible process for stochastically generating quantile paths: it was chosen in part because it made proving integrability particularly simple. Other processes may provide other advantages, either with respect to statistical robustness or computation speed.
