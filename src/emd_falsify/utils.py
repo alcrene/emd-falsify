@@ -154,6 +154,7 @@ from typing import Union
 from pathlib import Path
 from datetime import datetime
 from socket import gethostname
+from importlib.metadata import version
 try:
     import git
 except ModuleNotFoundError:
@@ -173,7 +174,9 @@ class GitSHA:
     >>> GitSHA()
     myproject main #3b09572a
     """
-    css: str= "color: grey; text-align: right"
+    pcss: str= "color: grey; text-align: right; margin-bottom: 2px"
+    hrcss: str= "border-top: 5px grey; margin-top: 2px; margin-bottom: 2px;"
+    divcss: str= "width: {width}ex; margin-left: auto; margin-right: 0; padding: 0"
     # Default values used when a git repository can’t be loaded
     path  : str="No git repo found"
     branch: str=""
@@ -183,7 +186,7 @@ class GitSHA:
     def __init__(self, path: Union[None,str,Path]=None, nchars: int=8,
                  sha_prefix: str='#', show_path: str='stem',
                  show_branch: bool=True, show_hostname: bool=False,
-                 datefmt: str="%Y-%m-%d"):
+                 datefmt: str="%Y-%m-%d", packages: list[str]=()):
         """
         :param:path: Path to the git repository. Defaults to CWD.
         :param:nchars: Numbers of SHA hash characters to display. Default: 8.
@@ -196,6 +199,16 @@ class GitSHA:
         :param:datefmt: The format string to pass to ``datetime.strftime``.
             To not display any time at all, use an empty string.
             Default format is ``2000-12-31``.
+        :param:packages: A list of package names for which we also want track
+            the version. Each package will add a line to the output, formatted
+            as "{packagename} : {version}". The package’s version is retrieved
+            with `importlib.metadata.version`.
+
+        .. Caution: The version numbers retrieved by `importlib` are set when
+           when the package is installed. Therefore if the packages are installed
+           with an editable install, the version reported may be different from
+           the version actually used. In such a case, rerun `pip install -e`
+           to refresh the version.
         """
         ## Set attributes that should always work (don't depend on repo)
         if datefmt:
@@ -233,13 +246,38 @@ class GitSHA:
                 self.branch = repo.active_branch.name
             except TypeError:  # Can happen if on a detached head
                 pass
+        self.packages = {pkgname : version(pkgname) for pkgname in packages}
 
     def __str__(self):
-        return " ".join((s for s in (self.timestamp, self.hostname, self.path, self.branch, self.sha)
-                         if s))
+        watermark = " ".join((s for s in (self.timestamp, self.hostname, self.path, self.branch, self.sha)
+                                if s))
+        if self.packages:
+            lwidth = max(len(pkg) for pkg in self.packages.keys())
+            rwidth = max(len(ver) for ver in self.packages.values())
+            watermark += "\n" + "-"*(3+lwidth+rwidth)
+            # Left align both the the package names and their versions. Also align the colons
+            watermark += "\n" + "\n".join(
+                f"{name: <{lwidth}} : {ver: <{rwidth}}"
+                for name, ver in self.packages.items())
+        return watermark
     def __repr__(self):
         return self.__str__()
     def _repr_html_(self):
         hoststr = f"&nbsp;&nbsp;&nbsp;host: {self.hostname}" if self.hostname else ""
-        return f"<p style=\"{self.css}\">{self.timestamp}{hoststr}&nbsp;&nbsp;&nbsp;git: {self.path} {self.branch} {self.sha}</p>"
+        mainline_content = f"{self.timestamp}{hoststr}&nbsp;&nbsp;&nbsp;git: {self.path} {self.branch} {self.sha}"
+        mainline = f"<p style=\"{self.pcss}\">{mainline_content}</p>"
+        if self.packages:
+            lwidth = max(len(pkg) for pkg in self.packages.keys())
+            rwidth = max(len(ver) for ver in self.packages.values())
+            packwidth = 3 + lwidth + rwidth
+            packstr = f"<hr style=\"{self.hrcss}\"><p style=\"{self.pcss}\">" \
+                      + "<br>".join(f"{name} : {ver}" for name, ver in self.packages.items()) \
+                      + "</p>"
+        else:
+            packwidth = 0
+            packstr = ""
+        width = max(len(mainline_content), packwidth)
+        divcss = self.divcss.format(width=int(1*width))
+        return f"<div style=\"{divcss}\">{mainline}{packstr}</div>"
+
 
