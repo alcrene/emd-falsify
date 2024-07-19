@@ -1413,8 +1413,8 @@ def generate_quantile_paths(qstar: Callable, deltaEMD: Callable, c: float,
             progbar.refresh()
     for r in range(M):
         for _ in range(100):  # In practice, this should almost always work on the first try; 100 failures would mean a really pathological probability
-            qstart  = rng.normal(qstar(Phistart) , c*deltaEMD(Phistart))
-            qend = rng.normal(qstar(Phiend), c*deltaEMD(Phiend))
+            qstart  = rng.normal(qstar(Phistart) , math.sqrt(c)*deltaEMD(Phistart))
+            qend = rng.normal(qstar(Phiend), math.sqrt(c)*deltaEMD(Phiend))
             if qstart < qend:
                 break
         else:
