@@ -85,7 +85,7 @@ def get_bin_sizes(total_points, target_bin_size=None) -> Array[int,1]:
         dist_rate = extra_to_distribute / nbins
         distributed_ones = []
         c = 0
-        for i in range(nbins):
+        for _ in range(nbins):
             new_c = c + dist_rate
             distributed_ones.append(int(int(c) != int(new_c)))
             c = new_c
@@ -104,8 +104,8 @@ def get_bin_sizes(total_points, target_bin_size=None) -> Array[int,1]:
         distributed_ones = np.zeros(nbins, dtype=int)
             
     bin_sizes = target_bin_size + extra_per_bin_all + np.array(distributed_ones)
-    assert bin_sizes.sum() == total_points, f"Bins sum to {bin_sizes.sum()}, when they should sum to {total_points}. " + report_err_msg
-    assert np.unique(bin_sizes).size <= 2, f"Bin sizes should not differ by more than one." + report_err_msg
+    assert bin_sizes.sum() == total_points, f"Bins sum to {bin_sizes.sum()}, when they should sum to {total_points}. {report_err_msg}"
+    assert np.unique(bin_sizes).size <= 2, f"Bin sizes should not differ by more than one. {report_err_msg}"
     return bin_sizes
 
 # ## Bemd comparison matrix
@@ -150,6 +150,7 @@ def compare_matrix(R_samples: Dict[str, ArrayLike]) -> pd.DataFrame:
 # ## Pretty-print Git version
 # (Ported from *mackelab_toolbox.utils*)
 
+import contextlib
 from typing import Union
 from pathlib import Path
 from datetime import datetime
@@ -211,14 +212,9 @@ class GitSHA:
            to refresh the version.
         """
         ## Set attributes that should always work (don't depend on repo)
-        if datefmt:
-            self.timestamp = datetime.now().strftime(datefmt)
-        else:
-            self.timestamp = ""
-        if show_hostname:
-            self.hostname = gethostname()
-        else:
-            self.hostname = ""
+        self.timestamp = datetime.now().strftime(datefmt) if datefmt else ""
+        self.hostname = gethostname() if show_hostname else ""
+        self.packages = {pkgname : version(pkgname) for pkgname in packages}
         ## Set attributes that depend on repository
         # Try to load repository
         if git is None:
@@ -242,11 +238,8 @@ class GitSHA:
                              "'full', 'stem', or 'none'")
         self.branch = ""
         if show_branch:
-            try:
+            with contextlib.suppress(TypeError):
                 self.branch = repo.active_branch.name
-            except TypeError:  # Can happen if on a detached head
-                pass
-        self.packages = {pkgname : version(pkgname) for pkgname in packages}
 
     def __str__(self):
         watermark = " ".join((s for s in (self.timestamp, self.hostname, self.path, self.branch, self.sha)

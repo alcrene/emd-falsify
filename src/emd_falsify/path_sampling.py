@@ -1269,7 +1269,7 @@ def generate_path_hierarchical_beta(
         qhat: The generated path, evaluated at the values listed in `Φhat`.
     """
     # Validation
-    res = int(res)
+    res = int(res)  # sourcery skip: remove-unnecessary-cast
     if Phistart >= Phiend:
         raise ValueError("`Phistart` must be strictly smaller than `Phiend`. "
                          f"Received:\n  {Phistart=}\n  {Phiend=}")
@@ -1411,7 +1411,7 @@ def generate_quantile_paths(qstar: Callable, deltaEMD: Callable, c: float,
             progbar.dynamic_miniters = False
             progbar.n = previous_M
             progbar.refresh()
-    for r in range(M):
+    for r in range(M):  # sourcery skip: for-index-underscore
         for _ in range(100):  # In practice, this should almost always work on the first try; 100 failures would mean a really pathological probability
             qstart  = rng.normal(qstar(Phistart) , math.sqrt(c)*deltaEMD(Phistart))
             qend = rng.normal(qstar(Phiend), math.sqrt(c)*deltaEMD(Phiend))
