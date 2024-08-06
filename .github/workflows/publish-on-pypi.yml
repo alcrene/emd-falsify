@@ -1,0 +1,31 @@
+# https://docs.pypi.org/trusted-publishers/using-a-publisher/
+# https://packaging.python.org/en/latest/guides/publishing-package-distribution-releases-using-github-actions-ci-cd-workflows/
+# https://github.com/marketplace/actions/pypi-publish#non-goals
+# https://github.com/actions/download-artifact?tab=readme-ov-file#download-artifacts-from-other-workflow-runs-or-repositories
+# https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens#creating-a-fine-grained-personal-access-token
+# https://docs.github.com/en/actions/security-guides/using-secrets-in-github-actions#creating-secrets-for-an-environment
+
+name: Publish release on PyPI
+run-name: ${{ github.actor }} is publishing the latest release on PyPI
+# Run job by triggering it manually with the web UI: https://docs.github.com/en/actions/using-workflows/manually-running-a-workflow#running-a-workflow
+on: workflow_dispatch
+jobs:
+  pypi-publish:
+    name: Upload release to PyPI
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      id-token: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-build
+          path: dist/
+          github-token: ${{ secrets.GH_PAT }}
+          run-id: ${{ vars.BUILD_RUN_ID }}
+
+      - name: Display structure of downloaded files
+        run: ls -R
+
+      - name: Publish package distributions PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
