@@ -17,7 +17,7 @@
 # %% [markdown] tags=["remove-cell"] editable=true slideshow={"slide_type": ""}
 # ---
 # math:
-#   '\Bconf' : 'B^{\mathrm{conf}}_{#1}'
+#   '\Bconf' : 'B^{\mathrm{epis}}_{#1}'
 #   '\Bemd'  : 'B_{#1}^{\mathrm{EMD}}'
 # ---
 

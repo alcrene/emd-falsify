@@ -30,13 +30,6 @@ from valconfig.contrib.holoviews import FiguresConfig, HoloMPLConfig, HoloBokehC
 from scityping import Config as ScitypingConfig
 
 
-# %% [markdown]
-# Possible improvement: If we could have nested config parsers, we might be 
-#     able to rely more on the ConfigParser machinery, and less on a custom
-#     Pydantic type, which should be easier for others to follow.
-#     In particular, the `colors` field could remain a config parser, although
-#     we would still want to allow dotted access.
-
 # %%
 class Config(ValConfig):
     __default_config_path__   = "defaults.cfg"
