@@ -7,6 +7,8 @@ It is described in [this publication](); it’s main features are:
 - **Specific**: Models are compared for particular parameter sets. In particular, the different models may all be the same equations but with different parameters.
 - **Dimension agnostic**: Models are compared based on their quantile function, which is always 1d. So the method scales well to high-dimensional problems.
 
+[![DOI](https://zenodo.org/badge/DOI/10.5281/zenodo.13287994.svg)](https://doi.org/10.5281/zenodo.13287994)
+
 ## Problem requirements
 
 The main requirement to be able to compute the EMD criterion are:
