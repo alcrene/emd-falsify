@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 write_to = "src/emd_falsify/_version.py"
 
 [project.urls]
-#"Documentation" =
+"Documentation" = "https://alcrene.github.io/emd-falsify/"
 "Bug Tracker" = "https://github.com/alcrene/emd-falsify/issues"
 "Source" = "https://github.com/alcrene/emd-falsify"
 
@@ -59,7 +59,7 @@ dynamic = ["version"]
 [project.optional-dependencies]
 
 ## Development dependencies
-dev = ["pytest"]
+test = ["pytest"]
 
 ## Dependencies of the `viz` utilities module ##
 viz = ["pandas", "matplotlib", "seaborn", "holoviews"]
