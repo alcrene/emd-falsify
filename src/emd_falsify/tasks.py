@@ -147,7 +147,7 @@ class EpistemicDist(abc.ABC):
 # | `c_list` | The values of $c$ we want to test. |
 # | `models` | Sequence of $N$ quintuplets of models (data generation, candidate A, candidate B, loss A, loss B) drawn from a calibration distribution. Typically, but not necessarily, a subclass of `EpistemicDist`: any dataclass satisfying the requirements listed in `EpistemicDist` is accepted. |
 # | `Ldata` | Data set size used to construct the empirical PPF for models $A$ and $B$. Ideally commensurate with the actual data set used to assess models. |
-# | `Linf` | Data set size considered equivalent to "infinite". Used to compute $\B^{\mathrm{conf}}$ |
+# | `Linf` | Data set size considered equivalent to "infinite". Used to compute $\Bconf{}$ |
 #
 # The value of $N$ is determined from `len(models)`, so the `models` iterable should define its length.
 #
