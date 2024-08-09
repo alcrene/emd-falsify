@@ -13,12 +13,15 @@
 
 import math
 import numpy as np
-import pandas as pd
 import dataclasses
 import logging
 from inspect import unwrap
+try:
+    import pandas as pd
+except ModuleNotFoundError:
+    class pd:
+        DataFrame = dict
 
-import IPython
 
 from typing import ClassVar, Optional, Union, Tuple, NamedTuple, Literal, Dict
 from scityping.numpy import NPValue, Array
@@ -133,6 +136,9 @@ def compare_matrix(R_samples: Dict[str, ArrayLike]) -> pd.DataFrame:
     :param:R_samples: A dictionary of samples of the expected risk.
        Each entry is a list of samples for a model. The dictionary keys
        determine the headings of the returned DataFrame.
+
+    .. Note:: If `pandas` is not installed, the values are returned
+       as a dictionary.
     """
     R_keys = list(R_samples)
     compare_data = {k: {} for k in R_keys}

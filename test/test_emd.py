@@ -12,5 +12,3 @@ def test_interp1d():
 
     Φarr = np.linspace(0, 1)
     assert np.array_equal(ppf(Φarr), ppf2(Φarr))
-
-test_interp1d()

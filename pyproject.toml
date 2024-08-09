@@ -51,7 +51,7 @@ dependencies = [
     "joblib",
         # joblib is used for on-disk caching of calculations used in calibration plots    
     "scityping",
-    "valconfig>=0.1.2-rc3",
+    "valconfig>=0.1.2",
 ]
 
 dynamic = ["version"]
@@ -62,8 +62,7 @@ dynamic = ["version"]
 dev = ["pytest"]
 
 ## Dependencies of the `viz` utilities module ##
-viz = ["pandas", "matplotlib", "seaborn", "holoviews", "addict"]
-    # 'addict' used by valconfig.contrib.holoviews
+viz = ["pandas", "matplotlib", "seaborn", "holoviews"]
 
 
 ## Executing notebooks and building “code browser” pages ##
