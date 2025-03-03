@@ -690,11 +690,11 @@ def Bemd(mixed_risk_ppfA: Callable, mixed_risk_ppfB: Callable,
     if not use_multiprocessing:
         RA_lst = draw_R_samples(
             mixed_risk_ppfA, synth_risk_ppfA, c=c,
-            res=res, N=N, M=M, relstderr_tol=relstderr_tol,
+            res=res, M=M, max_M=max_M, relstderr_tol=relstderr_tol,
             path_progbar=progbarA)
         RB_lst = draw_R_samples(
             mixed_risk_ppfB, synth_risk_ppfB, c=c,
-            res=res, N=N, M=M, relstderr_tol=relstderr_tol,
+            res=res, M=M, max_M=max_M, relstderr_tol=relstderr_tol,
             path_progbar=progbarB)
         
     else:
