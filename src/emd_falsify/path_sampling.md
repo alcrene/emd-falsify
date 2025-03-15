@@ -1377,10 +1377,11 @@ def generate_path_hierarchical_beta(
        the space between a start and an end point, but it needs the value of _q_
        to be given at those points. These end points are by default Φ=0 and Φ=1,
        which correspond to the bounds of a quantile function.
-    res: Returned paths have length ``2**res``.
+    res: Returned paths have length ``2**res+1``, and therefore ``2**res`` increments.
        Typical values of `res` are 6, 7 and 8, corresponding to paths of length
        64, 128 and 256. Smaller may be useful to accelerate debugging. Larger values
        increase the computation cost with typically negligible improvements in accuracy.
+       Must be at least 1.
     rng: Any argument accepted by `numpy.random.default_rng` to initialize an RNG.
     Phistart, Phiend: (Keyword only) The abscissa corresponding to the ordinates
        `qstart` and `qend`. The default values are 0 and 1, appropriate for generating
@@ -1393,7 +1394,7 @@ def generate_path_hierarchical_beta(
         qhat: The generated path, evaluated at the values listed in `Φhat`.
     """
     # Validation
-    res = int(res)
+    res = int(res)  # sourcery skip: remove-unnecessary-cast
     if Phistart >= Phiend:
         raise ValueError("`Phistart` must be strictly smaller than `Phiend`. "
                          f"Received:\n  {Phistart=}\n  {Phiend=}")
@@ -1401,8 +1402,8 @@ def generate_path_hierarchical_beta(
     #     raise ValueError("`Phi`, `qstar` and `Mvar` must all have "
     #                      "the same shape. Values received have the respective shapes "
     #                      f"{np.shape(Phi)}, {np.shape(qstar)}, {np.shape(Mvar)}")
-    if res <= 1:
-        raise ValueError("`res` must be greater than 1.")
+    if res < 1:
+        raise ValueError("`res` must be greater or equal to 1.")
     rng = np.random.default_rng(rng)  # No-op if `rng` is already a Generator
     # Interpolation
     N  = 2**res + 1
@@ -1546,10 +1547,10 @@ def generate_quantile_paths(qstar: Callable, deltaEMD: Callable, c: float,
             progbar.dynamic_miniters = False
             progbar.n = previous_M
             progbar.refresh()
-    for r in range(M):
+    for r in range(M):  # sourcery skip: for-index-underscore
         for _ in range(100):  # In practice, this should almost always work on the first try; 100 failures would mean a really pathological probability
-            qstart  = rng.normal(qstar(Phistart) , c*deltaEMD(Phistart))
-            qend = rng.normal(qstar(Phiend), c*deltaEMD(Phiend))
+            qstart  = rng.normal(qstar(Phistart) , math.sqrt(c)*deltaEMD(Phistart))
+            qend = rng.normal(qstar(Phiend), math.sqrt(c)*deltaEMD(Phiend))
             if qstart < qend:
                 break
         else:

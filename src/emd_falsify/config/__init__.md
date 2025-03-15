@@ -17,7 +17,7 @@ kernelspec:
 
 # Configuration options
 
-```{code-cell} ipython3
+```{code-cell}
 ---
 editable: true
 slideshow:
@@ -30,7 +30,7 @@ from typing import Optional, ClassVar, Union, Literal, Dict
 from configparser import ConfigParser
 ```
 
-```{code-cell} ipython3
+```{code-cell}
 ---
 editable: true
 slideshow:
@@ -43,20 +43,15 @@ from valconfig.contrib.holoviews import FiguresConfig, HoloMPLConfig, HoloBokehC
 from scityping import Config as ScitypingConfig
 ```
 
-Possible improvement: If we could have nested config parsers, we might be 
-    able to rely more on the ConfigParser machinery, and less on a custom
-    Pydantic type, which should be easier for others to follow.
-    In particular, the `colors` field could remain a config parser, although
-    we would still want to allow dotted access.
-
-```{code-cell} ipython3
+```{code-cell}
 class Config(ValConfig):
     __default_config_path__   = "defaults.cfg"
 
     class paths:
         figures : Path
 
-        ensure_dir_exists = validator('figures', allow_reuse=True)(ensure_dir_exists)
+        # This is typically used as a library: don’t create random paths on users’ computers
+        #ensure_dir_exists = validator('figures', allow_reuse=True)(ensure_dir_exists)
 
     class mp:
         max_cores: int
@@ -130,7 +125,7 @@ class Config(ValConfig):
 config = Config(Path(__file__).parent/"defaults.cfg",
                 config_module_name=__name__)
 
-```{code-cell} ipython3
+```{code-cell}
 ---
 editable: true
 slideshow:
