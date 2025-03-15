@@ -5,7 +5,7 @@
 
 #######################################################################################
 # Book settings
-title                       : EMD-falsify  # The title of the book. Will be placed in the left navbar.
+title                       : EMD compare  # The title of the book. Will be placed in the left navbar.
 author                      : Alexandre René  # The author of the book
 copyright                   : "2023"  # Copyright year to be placed in the footer
 logo                        : ""  # A path to the book logo
@@ -25,7 +25,7 @@ execute:
 # Define the name of the latex output file for PDF builds
 latex:
   latex_documents:
-    targetname: emd-falsify.tex
+    targetname: emdcmp.tex
 
 # Parse and render settings
 parse:

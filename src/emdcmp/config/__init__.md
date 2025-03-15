@@ -8,9 +8,9 @@ jupytext:
     format_name: myst
     format_version: 0.13
 kernelspec:
-  display_name: Python (emd-falsify-dev)
+  display_name: Python (emdcmp-dev)
   language: python
-  name: emd-falsify-dev
+  name: emdcmp-dev
 ---
 
 +++ {"editable": true, "slideshow": {"slide_type": ""}}
@@ -116,9 +116,9 @@ class Config(ValConfig):
     scityping: ScitypingConfig={}
     
     @validator('scityping')
-    def add_emd_falsify_safe_packages(scityping):
-        scityping.safe_packages |= {"emd_falsify.tasks"}
-        # scityping.safe_packages |= {"emd_falsify.models", "emd_falsify.tasks"}
+    def add_emdcmp_safe_packages(scityping):
+        scityping.safe_packages |= {"emdcmp.tasks"}
+        # scityping.safe_packages |= {"emdcmp.models", "emdcmp.tasks"}
         return scityping
 ```
 

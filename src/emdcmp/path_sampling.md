@@ -8,9 +8,9 @@ jupytext:
     format_name: myst
     format_version: 0.13
 kernelspec:
-  display_name: Python (emd-falsify-dev)
+  display_name: Python (emdcmp-dev)
   language: python
-  name: emd-falsify-dev
+  name: emdcmp-dev
 ---
 
 +++ {"tags": ["remove-cell"], "editable": true, "slideshow": {"slide_type": ""}}
@@ -74,7 +74,7 @@ from typing import Optional, Union, Literal, Tuple, Generator
 from scityping import Real
 from scityping.numpy import Array, Generator as RNGenerator
 
-from emd_falsify.digitize import digitize  # Used to improve numerical stability when finding Beta parameters
+from emdcmp.digitize import digitize  # Used to improve numerical stability when finding Beta parameters
 ```
 
 +++ {"tags": ["remove-cell"]}
@@ -93,7 +93,7 @@ import scipy.stats
 import holoviews as hv
 from myst_nb import glue
 
-from emd_falsify.utils import GitSHA
+from emdcmp.utils import GitSHA
 from config import config  # Uses config from CWD
 
 hv.extension(config.viz.backend)

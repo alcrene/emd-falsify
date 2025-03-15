@@ -9,7 +9,7 @@
 #       format_version: '1.5'
 # ---
 
-# # Utilities for the EMD-falsify library
+# # Utilities for the EMD-compare library
 
 import math
 import numpy as np
@@ -122,7 +122,7 @@ def compare_matrix(R_samples: Dict[str, ArrayLike]) -> pd.DataFrame:
 
     Example usage:
 
-        >>> import emd_falsify as emd
+        >>> import emdcmp as emd
         >>> [define models A, B, C]
         >>> R_samples = {"A": emd.draw_R_samples(model A),
                          "B": emd.draw_R_samples(model B),

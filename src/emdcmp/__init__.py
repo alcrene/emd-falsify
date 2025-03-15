@@ -21,7 +21,7 @@ def __getattr__(attr):
     # elif attr == "Calibrate":
     #     from . import tasks
     #     return tasks.Calibrate
-    raise AttributeError(f"Module `emd_falsify` does not define '{attr}'.")
+    raise AttributeError(f"Module `emdcmp` does not define '{attr}'.")
 
 # Include this variable at the bottom of notebooks to display the branch name & git commit used to execute it
 # from .utils import GitSHA;

@@ -9,9 +9,9 @@
 #       format_name: percent
 #       format_version: '1.3'
 #   kernelspec:
-#     display_name: Python (emd-falsify-dev)
+#     display_name: Python (emdcmp-dev)
 #     language: python
-#     name: emd-falsify-dev
+#     name: emdcmp-dev
 # ---
 
 # %% [markdown] tags=["remove-cell"] editable=true slideshow={"slide_type": ""}
@@ -60,7 +60,7 @@ import scityping.scipy
 from smttask import RecordedTask, TaskOutput
 from smttask.workflows import ParamColl, SeedGenerator
 
-import emd_falsify as emd
+import emdcmp as emd
 
 # %% editable=true slideshow={"slide_type": ""}
 logger = logging.getLogger(__name__)
@@ -298,12 +298,12 @@ def compute_Bemd(i_ω_c: Tuple[int, Experiment, float],
                  #candidate_model_A: CandidateModel, candidate_model_B: CandidateModel,
                  Ldata):
     """
-    Wrapper for `emd_falsify.Bemd`:
+    Wrapper for `emdcmp.Bemd`:
     - Unpack `datamodel_c` into `data_mode
     - Instantiates models using parameters in `Θtup_c`.
     - Constructs log-probability functions for `MtheoA` and `MtheoB`.
     - Generates synthetic observed data using `Mtrue`.
-    - Calls `emd_falsify.Bemd`
+    - Calls `emdcmp.Bemd`
 
     """
     ## Unpack arg 1 ##  (pool.imap requires iterating over one argument only)
@@ -332,7 +332,7 @@ def compute_Bemd(i_ω_c: Tuple[int, Experiment, float],
 
     logger.debug("Compute Bemd - Generating R samples"); t1 = time.perf_counter()
     
-    emdlogger = logging.getLogger("emd_falsify.emd")
+    emdlogger = logging.getLogger("emdcmp.emd")
     emdlogginglevel = emdlogger.level
     emdlogger.setLevel(logging.ERROR)
 

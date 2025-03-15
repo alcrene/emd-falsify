@@ -3,17 +3,17 @@ requires = ["setuptools>=61.0.0", "setuptools-scm>=8.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools_scm]
-write_to = "src/emd_falsify/_version.py"
+write_to = "src/emdcmp/_version.py"
 
 [project.urls]
-"Documentation" = "https://alcrene.github.io/emd-falsify/"
-"Bug Tracker" = "https://github.com/alcrene/emd-falsify/issues"
-"Source" = "https://github.com/alcrene/emd-falsify"
+"Documentation" = "https://alcrene.github.io/emdcmp/"
+"Bug Tracker" = "https://github.com/alcrene/emdcmp/issues"
+"Source" = "https://github.com/alcrene/emdcmp"
 
 [project]
-name        = "emd-falsify"
+name        = "emdcmp"
 authors = [
-    {name = "Alexandre René", email="arene010@uottawa.ca"},
+    {name = "Alexandre René", email="a.rene@physik.rwth-aachen.de"},
 ]
 description = "Original implementation of the EMD (empirical model discrepancy) model comparison criterion"
 readme      = "README.md"

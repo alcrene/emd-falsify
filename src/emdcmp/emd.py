@@ -9,9 +9,9 @@
 #       format_name: percent
 #       format_version: '1.3'
 #   kernelspec:
-#     display_name: Python (emd-falsify-dev)
+#     display_name: Python (emdcmp-dev)
 #     language: python
-#     name: emd-falsify-dev
+#     name: emdcmp-dev
 # ---
 
 # %% [markdown] tags=["remove-cell"] editable=true slideshow={"slide_type": ""}
@@ -51,9 +51,9 @@ from tqdm.auto import tqdm
 from typing import Optional, Union, Any, Literal, Tuple, List, Dict, NamedTuple
 from scityping.numpy import Array
 
-from emd_falsify import Config
-from emd_falsify.path_sampling import generate_quantile_paths
-from emd_falsify.memoize import memoize
+from emdcmp import Config
+from emdcmp.path_sampling import generate_quantile_paths
+from emdcmp.memoize import memoize
 
 config = Config()
 logger = logging.getLogger(__name__)
@@ -219,7 +219,7 @@ def make_empirical_risk_ppf(risk_samples: Array[float,1]) -> interp1d:
        function.
 
     .. Note:: When calling `Bemd` directly, any callable will work for the PPF
-       argument. However, in order to use the `Calibrate` task under `emd_falsify.tasks`,
+       argument. However, in order to use the `Calibrate` task under `emdcmp.tasks`,
        it is necessary for the PPF callable to be *serializable*. This package
        adds special support to make scipy’s `interp1d` class serializable, but other
        interpolators will not work out of the box with `Calibrate`.
@@ -758,5 +758,5 @@ def Bemd(mixed_risk_ppfA: Callable, mixed_risk_ppfB: Callable,
 # Bemd(mixed_ppfA, mixed_ppfB, synth_ppfA, synth_ppfB, c=1)
 
 # %% editable=true slideshow={"slide_type": ""} tags=["active-ipynb", "remove-input"]
-# from emd_falsify.utils import GitSHA
+# from emdcmp.utils import GitSHA
 # GitSHA()

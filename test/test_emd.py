@@ -1,4 +1,4 @@
-import emd_falsify as emd
+import emdcmp as emd
 import numpy as np
 from scityping import Serializable
 

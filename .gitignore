@@ -6,5 +6,5 @@ build
 
 purgatory
 _version.py
-emd_falsify/*.md
+emdcmp/*.md
 test/*.txt

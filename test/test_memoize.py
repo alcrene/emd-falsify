@@ -1,5 +1,5 @@
 from functools import cache
-from emd_falsify.memoize import nofail_functools_cache
+from emdcmp.memoize import nofail_functools_cache
 
 def test_nofail_cache(caplog):
     @nofail_functools_cache

@@ -8,9 +8,9 @@ jupytext:
     format_name: myst
     format_version: 0.13
 kernelspec:
-  display_name: Python (emd-falsify-dev)
+  display_name: Python (emdcmp-dev)
   language: python
-  name: emd-falsify-dev
+  name: emdcmp-dev
 ---
 
 ```{code-cell}
@@ -118,7 +118,7 @@ def calibration_plot(calib_results: CalibrateResult,
     ----------
     calib_results: The calibration results to plot. The typical way to obtain
        these is to create and run `Calibrate` task:
-       >>> task = emd_falsify.tasks.Calibrate(...)
+       >>> task = emdcmp.tasks.Calibrate(...)
        >>> calib_results = task.unpack_results(task.run())
     target_bin_size: Each point on the calibration curve is an average over
        some number of calibration experiments; this parameter sets that number.

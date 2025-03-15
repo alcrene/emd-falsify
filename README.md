@@ -21,14 +21,14 @@ The models can take any form; they can even be blackbox deep neural networks.
 
 ## Installation
 
-    pip install emd-falsify
+    pip install emdcmp
 
 ## Usage
 
 The short form for comparing two models is
 
 ```python
-from emd_falsify import Bemd, make_empirical_risk
+from emdcmp import Bemd, make_empirical_risk
 
 # Load data into `data`
 # Define `modelA`, `modelB`
@@ -49,11 +49,11 @@ Using them is a bit more verbose, but especially for cases with multiple models 
 they may be more convenient.
 
 Note that comparisons depend on choosing an appropriate value for `c`; a systematic way to do this is via a *calibration experiment*, as described in our publication.
-This package provides `emd_falsify.tasks.Calibrate` to help run calibration experiments.
+This package provides `emdcmp.tasks.Calibrate` to help run calibration experiments.
 
 ### Complete usage examples
 
-The documentation contains a [simple example](https://alcrene.github.io/emd-falsify/src/emd_falsify/emd.html#test-sampling-of-expected-risk-r).
+The documentation contains a [simple example](https://alcrene.github.io/emdcmp/src/emdcmp/emd.html#test-sampling-of-expected-risk-r).
 Moreover, all the [code for the paper’s figures] is available, in the form of Jupyter notebooks.
 These are heavily commented with extra additional usage hints; they are highly recommended reading.
 
@@ -63,7 +63,7 @@ These are heavily commented with extra additional usage hints; they are highly r
 If computations are taking inordinately long, set the debug level to `DEBUG`:
 
     
-    logging.getLogger("emd_falsify").setLevel("DEBUG")
+    logging.getLogger("emdcmp").setLevel("DEBUG")
 
 This will print messages to your console reporting how much time each computation step is taking, which should help pin down the source of the issue.
 

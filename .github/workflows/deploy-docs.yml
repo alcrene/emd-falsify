@@ -39,7 +39,7 @@ jobs:
 
       - name: Install IPython kernel
         run: |
-          python -m ipykernel install --user --name=emd-falsify-dev
+          python -m ipykernel install --user --name=emdcmp-dev
 
       # Build the book
       - name: Build the book

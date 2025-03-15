@@ -9,9 +9,9 @@
 #       format_name: percent
 #       format_version: '1.3'
 #   kernelspec:
-#     display_name: Python (emd-falsify-dev)
+#     display_name: Python (emdcmp-dev)
 #     language: python
-#     name: emd-falsify-dev
+#     name: emdcmp-dev
 # ---
 
 # %% [markdown] tags=["remove-cell"] editable=true slideshow={"slide_type": ""}
@@ -63,7 +63,7 @@ from typing import Optional, Union, Literal, Tuple, Generator
 from scityping import Real
 from scityping.numpy import Array, Generator as RNGenerator
 
-from emd_falsify.digitize import digitize  # Used to improve numerical stability when finding Beta parameters
+from emdcmp.digitize import digitize  # Used to improve numerical stability when finding Beta parameters
 
 # %% [markdown] tags=["remove-cell"]
 # Notebook-only imports
@@ -74,7 +74,7 @@ from emd_falsify.digitize import digitize  # Used to improve numerical stability
 # import holoviews as hv
 # from myst_nb import glue
 #
-# from emd_falsify.utils import GitSHA
+# from emdcmp.utils import GitSHA
 # from config import config  # Uses config from CWD
 #
 # hv.extension(config.viz.backend)

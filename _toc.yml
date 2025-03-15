@@ -4,9 +4,9 @@
 format: jb-book
 root: README
 chapters:
-- file: src/emd_falsify/emd
-- file: src/emd_falsify/path_sampling
-- file: src/emd_falsify/tasks
-- file: src/emd_falsify/viz
-- file: src/emd_falsify/config/__init__.md
+- file: src/emdcmp/emd
+- file: src/emdcmp/path_sampling
+- file: src/emdcmp/tasks
+- file: src/emdcmp/viz
+- file: src/emdcmp/config/__init__.md
 - file: references
